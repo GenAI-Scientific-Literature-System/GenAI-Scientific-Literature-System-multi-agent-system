@@ -5,20 +5,20 @@ from groq import Groq
 from agents.claim_extraction.prompt import CLAIM_EXTRACTION_PROMPT
 
 class ClaimExtractor:
-    def __init__(self, api_key: str | list[str], model: str = "llama3-70b-8192"):
+    def __init__(self, api_key: str | list[str], model: str = "llama-3.3-70b-versatile"):
         self.api_keys = [api_key] if isinstance(api_key, str) else api_key
         self.current_key_index = 0
         self.client = Groq(api_key=self.api_keys[0])
         self.model = model
         self.fallback_models = [
-            "llama3-70b-8192",                # Meta, strong general purpose
-            "openai/gpt-oss-120b",            # ChatGPT OSS fallback
-            "llama-3.1-70b-versatile",        # Meta, improved instruction following
-            "llama-3.3-70b-versatile",        # Meta, latest 70b
-            "deepseek-r1-distill-llama-70b",  # DeepSeek, strong reasoning
-            "qwen-qwq-32b",                   # Alibaba, strong reasoning
-            "mixtral-8x7b-32768",             # Mistral, long context
-            "gemma2-9b-it",                   # Google, lightweight fallback
+            "llama-3.3-70b-versatile",                # Meta, latest 70b
+            "openai/gpt-oss-120b",                    # OpenAI OSS, 120b
+            "moonshotai/kimi-k2-instruct-0905",       # Moonshot, 256K context
+            "moonshotai/kimi-k2-instruct",            # Moonshot, alternate
+            "meta-llama/llama-4-scout-17b-16e-instruct",  # Meta Llama 4 MoE
+            "qwen/qwen3-32b",                         # Alibaba, 32b reasoning
+            "openai/gpt-oss-20b",                     # OpenAI OSS, 20b
+            "llama-3.1-8b-instant",                   # Meta, 8b fast fallback
         ]
 
     def _rotate_key(self):
@@ -27,7 +27,7 @@ class ClaimExtractor:
             return False  # no more keys
         self.client = Groq(api_key=self.api_keys[self.current_key_index])
         return True
-
+    
     def extract(self, paper_text: str) -> dict:
         MAX_CHARS = 6000
         if len(paper_text) > MAX_CHARS:
@@ -42,7 +42,7 @@ class ClaimExtractor:
         models_to_try = [self.model] + [m for m in self.fallback_models if m != self.model]
         for model in models_to_try:
             try:
-                print(f"[ClaimExtractor] Using model: {model}")
+                print(f"[ClaimExtractor] Using key#{self.current_key_index + 1}, model: {model}")
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": filled_prompt}],
@@ -53,11 +53,20 @@ class ClaimExtractor:
 
             except Exception as e:
                 last_error = str(e)
-                # if rate limited, try rotating API key before next model
-                if "rate_limit" in str(e).lower() or "429" in str(e):
+                err = str(e).lower()
+                # rotate key on rate limit or invalid/unauthorized key errors
+                if (
+                    "rate_limit" in err
+                    or "429" in err
+                    or "invalid_api_key" in err
+                    or "invalid api key" in err
+                    or "401" in err
+                    or "unauthorized" in err
+                ):
                     rotated = self._rotate_key()
                     if rotated:
                         try:
+                            print(f"[ClaimExtractor] Retrying with key#{self.current_key_index + 1}, model: {model}")
                             response = self.client.chat.completions.create(
                                 model=model,
                                 messages=[{"role": "user", "content": filled_prompt}],
