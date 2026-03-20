@@ -1,31 +1,23 @@
 # agents/claim_extraction/claim_extractor.py
 
 import json
+from typing import Iterable
+
 from groq import Groq
 from agents.claim_extraction.prompt import CLAIM_EXTRACTION_PROMPT
+from utils.api_keys import ApiKeyManager
+from utils.model_config import DEFAULT_CLAIM_EXTRACTION_MODEL, ordered_models
 
 class ClaimExtractor:
-    def __init__(self, api_key: str | list[str], model: str = "llama-3.3-70b-versatile"):
-        self.api_keys = [api_key] if isinstance(api_key, str) else api_key
-        self.current_key_index = 0
-        self.client = Groq(api_key=self.api_keys[0])
+    def __init__(self, api_key: str | Iterable[str], model: str = DEFAULT_CLAIM_EXTRACTION_MODEL):
+        self.key_manager = ApiKeyManager.from_value(api_key)
+        self.client = Groq(api_key=self.key_manager.current)
         self.model = model
-        self.fallback_models = [
-            "llama-3.3-70b-versatile",                # Meta, latest 70b
-            "openai/gpt-oss-120b",                    # OpenAI OSS, 120b
-            "moonshotai/kimi-k2-instruct-0905",       # Moonshot, 256K context
-            "moonshotai/kimi-k2-instruct",            # Moonshot, alternate
-            "meta-llama/llama-4-scout-17b-16e-instruct",  # Meta Llama 4 MoE
-            "qwen/qwen3-32b",                         # Alibaba, 32b reasoning
-            "openai/gpt-oss-20b",                     # OpenAI OSS, 20b
-            "llama-3.1-8b-instant",                   # Meta, 8b fast fallback
-        ]
 
     def _rotate_key(self):
-        self.current_key_index += 1
-        if self.current_key_index >= len(self.api_keys):
+        if not self.key_manager.rotate():
             return False  # no more keys
-        self.client = Groq(api_key=self.api_keys[self.current_key_index])
+        self.client = Groq(api_key=self.key_manager.current)
         return True
     
     def extract(self, paper_text: str) -> dict:
@@ -39,10 +31,10 @@ class ClaimExtractor:
         filled_prompt = CLAIM_EXTRACTION_PROMPT.format(paper_text=paper_text)
 
         last_error = None
-        models_to_try = [self.model] + [m for m in self.fallback_models if m != self.model]
+        models_to_try = ordered_models(self.model)
         for model in models_to_try:
             try:
-                print(f"[ClaimExtractor] Using key#{self.current_key_index + 1}, model: {model}")
+                print(f"[ClaimExtractor] Using key#{self.key_manager.position}, model: {model}")
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": filled_prompt}],
@@ -66,7 +58,7 @@ class ClaimExtractor:
                     rotated = self._rotate_key()
                     if rotated:
                         try:
-                            print(f"[ClaimExtractor] Retrying with key#{self.current_key_index + 1}, model: {model}")
+                            print(f"[ClaimExtractor] Retrying with key#{self.key_manager.position}, model: {model}")
                             response = self.client.chat.completions.create(
                                 model=model,
                                 messages=[{"role": "user", "content": filled_prompt}],
