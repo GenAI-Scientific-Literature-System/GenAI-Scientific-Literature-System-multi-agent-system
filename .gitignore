@@ -9,6 +9,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv/
 env/
 venv/
 ENV/
@@ -27,6 +28,10 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
 
 # IDE
 .vscode/
@@ -41,3 +46,7 @@ Thumbs.db
 
 # Test files
 test_agent1.py
+
+# Runtime outputs
+results.json
+results_*.json
