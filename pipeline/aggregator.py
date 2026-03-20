@@ -1,6 +1,7 @@
 # pipeline/aggregator.py
 
 import re
+import numpy as np
 from datetime import datetime
 from typing import Any
 from pipeline.embedding import EmbeddingEngine
@@ -140,8 +141,14 @@ class Aggregator:
         for paper in papers:
             paper["score"] = self._boost_score(paper)
 
-        # filter out low-relevance papers before final ranking
-        papers = [p for p in papers if (p.get("score") or 0.0) >= 0.80]
+        # dynamic threshold based on score distribution
+        scores = [p.get("score") or 0.0 for p in papers]
+        mean = float(np.mean(scores))
+        std = float(np.std(scores))
+        threshold = mean - 0.5 * std
+        papers = [p for p in papers if (p.get("score") or 0.0) >= threshold]
+        if self.debug:
+            print(f"[Aggregator] Dynamic threshold: {threshold:.4f} (mean={mean:.4f}, std={std:.4f})")
 
         # sort by final boosted score
         papers = sorted(papers, key=lambda p: p.get("score", 0.0), reverse=True)

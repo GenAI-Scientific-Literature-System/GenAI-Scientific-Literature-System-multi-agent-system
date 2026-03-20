@@ -67,6 +67,16 @@ class EuropePMCConnector:
         else:
             url = None
 
+        # Extract open/free PDF URL if available
+        pdf_url = None
+        full_text_urls = result.get("fullTextUrlList", {}).get("fullTextUrl", [])
+        for ft in full_text_urls:
+            availability = (ft.get("availability") or "").strip().lower()
+            doc_style = (ft.get("documentStyle") or "").strip().lower()
+            if availability in {"free", "open access"} and doc_style == "pdf":
+                pdf_url = ft.get("url")
+                break
+
         return {
             "paper_id": f"europepmc_{identifier}",
             "title": title,
@@ -75,6 +85,7 @@ class EuropePMCConnector:
             "year": year,
             "doi": doi,
             "url": url,
+            "pdf_url": pdf_url,
             "journal": journal,
             "authors": authors,
             "score": None

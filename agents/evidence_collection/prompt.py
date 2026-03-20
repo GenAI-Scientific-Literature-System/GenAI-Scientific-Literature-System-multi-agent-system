@@ -27,6 +27,8 @@ Rules:
 - Do not use intermediate labels like "partially supports"
 - The classification MUST be uppercase: SUPPORTS, CONTRADICTS, or INCONCLUSIVE
 - Keep reasoning concise and directly tied to the abstract (max 1 sentence)
+- Include an evidence_span that is a direct quote from the abstract supporting your classification
+- evidence_span must be an exact substring from the provided abstract, max 30 words
 
 Return ONLY valid JSON. No text outside the JSON.
 Ensure the JSON is valid and parsable. Do not include trailing commas.
@@ -37,7 +39,8 @@ Output format:
     {{
       "paper_id": "<paper_id>",
       "classification": "<SUPPORTS | CONTRADICTS | INCONCLUSIVE>",
-      "reasoning": "<one short sentence explaining your classification>"
+      "reasoning": "<one short sentence explaining your classification>",
+      "evidence_span": "<exact quote from abstract; empty string only if no relevant span exists>"
     }}
   ]
 }}

@@ -104,7 +104,7 @@ class EvidenceCollector:
 
         valid = []
         for item in result["evidence"]:
-            required_keys = ["paper_id", "classification", "reasoning"]
+            required_keys = ["paper_id", "classification", "reasoning", "evidence_span"]
             missing = [k for k in required_keys if k not in item]
             if missing:
                 if self.debug:
@@ -115,6 +115,7 @@ class EvidenceCollector:
             if classification not in {"SUPPORTS", "CONTRADICTS", "INCONCLUSIVE"}:
                 classification = "INCONCLUSIVE"
             item["classification"] = classification
+            item["evidence_span"] = (item.get("evidence_span") or "").strip()
             valid.append(item)
 
         return valid
@@ -143,6 +144,7 @@ class EvidenceCollector:
                         "paper_id": p["paper_id"],
                         "classification": "INCONCLUSIVE",
                         "reasoning": None,
+                        "evidence_span": "",
                         "error": "LLM call failed"
                     })
                 continue
@@ -154,6 +156,7 @@ class EvidenceCollector:
                         "paper_id": p["paper_id"],
                         "classification": "INCONCLUSIVE",
                         "reasoning": None,
+                        "evidence_span": "",
                         "error": "Parse failed"
                     })
                 continue
@@ -165,6 +168,7 @@ class EvidenceCollector:
                         "paper_id": p["paper_id"],
                         "classification": "INCONCLUSIVE",
                         "reasoning": None,
+                        "evidence_span": "",
                         "error": "Missing in LLM output"
                     })
 
