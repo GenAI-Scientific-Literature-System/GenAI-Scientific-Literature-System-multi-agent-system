@@ -17,6 +17,9 @@ Paper Text:
 
 Respond in this exact format:
 {{
+  "subject": "<main entity or population>",
+  "predicate": "<main relation/action>",
+  "object": "<outcome/finding/target>",
   "claim": "<the primary scientific claim>",
   "confidence": "<high | medium | low>",
   "reasoning": "<one sentence explaining why you chose this claim>"

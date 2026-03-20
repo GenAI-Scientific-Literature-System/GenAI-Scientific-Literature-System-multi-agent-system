@@ -99,6 +99,9 @@ class ClaimExtractor:
             result = json.loads(raw)
         except json.JSONDecodeError:
             return {
+                "subject": None,
+                "predicate": None,
+                "object": None,
                 "claim": None,
                 "confidence": None,
                 "reasoning": None,
@@ -106,9 +109,24 @@ class ClaimExtractor:
             }
 
         # validate keys
-        required_keys = ["claim", "confidence", "reasoning"]
+        required_keys = ["subject", "predicate", "object", "claim", "confidence", "reasoning"]
         missing = [k for k in required_keys if k not in result]
         if missing:
             result["error"] = f"Missing required fields: {missing}"
+
+        subject = (result.get("subject") or "").strip()
+        predicate = (result.get("predicate") or "").strip()
+        obj = (result.get("object") or "").strip()
+        claim_text = (result.get("claim") or "").strip()
+
+        # If claim text is missing but SPO is present, synthesize claim text.
+        if not claim_text and (subject or predicate or obj):
+            claim_text = " ".join(p for p in [subject, predicate, obj] if p).strip()
+
+        # Normalize final payload for downstream consumers.
+        result["subject"] = subject or None
+        result["predicate"] = predicate or None
+        result["object"] = obj or None
+        result["claim"] = claim_text or None
 
         return result

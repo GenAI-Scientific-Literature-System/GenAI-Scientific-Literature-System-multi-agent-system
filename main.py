@@ -12,11 +12,15 @@ from pipeline.retrieval import Retriever
 from pipeline.embedding import EmbeddingEngine
 from pipeline.aggregator import Aggregator
 from pipeline.clustering import PaperClusterer
+from utils.document_retriever import DocumentRetriever
+from utils.hallucination_guard import HallucinationGuard
 
 from agents.claim_extraction import ClaimExtractor
 from agents.evidence_collection import EvidenceCollector
 
 load_dotenv()
+
+_CLAIM_QUERY = "main claims findings results contributions conclusions"
 
 
 def run_pipeline(
@@ -86,14 +90,48 @@ def run_pipeline(
     if debug:
         print("\n=== STEP 5: Claim Extraction (Agent 1) ===")
     claim_extractor = ClaimExtractor(api_key=api_keys, model=DEFAULT_CLAIM_EXTRACTION_MODEL)
+    guard = HallucinationGuard(api_key=api_keys, model=DEFAULT_CLAIM_EXTRACTION_MODEL, debug=debug)
+    doc_retriever = DocumentRetriever(model=engine.model, debug=debug)
 
     for paper in final_papers:
-        claim_result = claim_extractor.extract(paper.get("abstract", ""))
-        paper["extracted_claim"] = claim_result.get("claim")
+        # Try full-text RAG context from PDF, fallback to abstract.
+        pdf_url = paper.get("pdf_url")
+
+        if pdf_url and doc_retriever.load_from_url(pdf_url):
+            context = doc_retriever.retrieve(_CLAIM_QUERY, top_k=4)
+            if debug:
+                print(f"  [RAG] {paper.get('paper_id')} — full text ({doc_retriever._chunks.__len__()} chunks)")
+        else:
+            context = paper.get("abstract", "")
+            if debug:
+                print(f"  [ABSTRACT] {paper.get('paper_id')}")
+
+        claim_result = claim_extractor.extract(context)
+        extracted_claim = claim_result.get("claim")
+        verification = guard.verify_claim(extracted_claim or "", context)
+
+        paper["claim_subject"] = claim_result.get("subject")
+        paper["claim_predicate"] = claim_result.get("predicate")
+        paper["claim_object"] = claim_result.get("object")
+        paper["raw_extracted_claim"] = extracted_claim
+        paper["claim_grounded"] = verification.get("grounded", False)
+        paper["claim_grounding_score"] = verification.get("score", 0.0)
+        paper["claim_grounding_method"] = verification.get("method")
+        paper["claim_grounding_reasoning"] = verification.get("reasoning")
+        paper["claim_grounding_confidence"] = verification.get("confidence")
+
+        # Keep only grounded claims for downstream evidence collection.
+        paper["extracted_claim"] = extracted_claim if verification.get("grounded", False) else None
         paper["claim_confidence"] = claim_result.get("confidence")
         paper["claim_reasoning"] = claim_result.get("reasoning")
         if debug:
-            print(f"  [{paper.get('paper_id')}] {paper.get('extracted_claim', 'FAILED')[:80]}")
+            claim_preview = paper.get("extracted_claim") or "FAILED"
+            print(
+                f"    [GUARD] grounded={paper.get('claim_grounded')} "
+                f"method={paper.get('claim_grounding_method')} "
+                f"score={paper.get('claim_grounding_score', 0.0):.2f}"
+            )
+            print(f"  [{paper.get('paper_id')}] {claim_preview[:80]}")
 
     # ── Step 6: Evidence Collection (Agent 2) ─────────────────────────────
     if debug:
@@ -121,24 +159,56 @@ def run_pipeline(
 
         evidence = collector.collect(claim=claim, papers=other_papers)
 
+        paper_lookup = {p.get("paper_id"): p.get("abstract", "") for p in other_papers}
+
+        def _filter_grounded_evidence(items: list[dict]) -> list[dict]:
+            filtered: list[dict] = []
+            for item in items:
+                abstract = paper_lookup.get(item.get("paper_id"), "")
+                verification = guard.verify_evidence_span_reasoning(
+                    reasoning=item.get("reasoning", ""),
+                    abstract=abstract,
+                    evidence_span=item.get("evidence_span", ""),
+                )
+                if verification.get("grounded", False):
+                    item["grounding"] = verification
+                    filtered.append(item)
+            return filtered
+
+        grounded_supporting = _filter_grounded_evidence(evidence.get("supporting", []))
+        grounded_contradicting = _filter_grounded_evidence(evidence.get("contradicting", []))
+        grounded_inconclusive = _filter_grounded_evidence(evidence.get("inconclusive", []))
+
         results.append({
             "focal_paper_id": focal_paper.get("paper_id"),
             "focal_paper_title": focal_paper.get("title"),
             "claim": claim,
+            "claim_structured": {
+                "subject": focal_paper.get("claim_subject"),
+                "predicate": focal_paper.get("claim_predicate"),
+                "object": focal_paper.get("claim_object"),
+            },
             "claim_confidence": focal_paper.get("claim_confidence"),
+            "claim_grounding": {
+                "grounded": focal_paper.get("claim_grounded"),
+                "score": focal_paper.get("claim_grounding_score"),
+                "method": focal_paper.get("claim_grounding_method"),
+                "reasoning": focal_paper.get("claim_grounding_reasoning"),
+                "confidence": focal_paper.get("claim_grounding_confidence"),
+            },
             "cluster_id": focal_paper.get("cluster_id"),
             "cluster_label": focal_paper.get("cluster_label"),
-            "supporting": evidence.get("supporting", []),
-            "contradicting": evidence.get("contradicting", []),
-            "inconclusive": evidence.get("inconclusive", []),
+            "supporting": grounded_supporting,
+            "contradicting": grounded_contradicting,
+            "inconclusive": grounded_inconclusive,
         })
 
         if debug:
             print(
                 f"  [{focal_paper.get('paper_id')}] "
-                f"support={len(evidence.get('supporting', []))} "
-                f"contradict={len(evidence.get('contradicting', []))} "
-                f"inconclusive={len(evidence.get('inconclusive', []))}"
+                f"support={len(grounded_supporting)} "
+                f"contradict={len(grounded_contradicting)} "
+                f"inconclusive={len(grounded_inconclusive)}"
             )
 
     # ── Final Output ──────────────────────────────────────────────────────

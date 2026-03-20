@@ -50,3 +50,7 @@ test_agent1.py
 # Runtime outputs
 results.json
 results_*.json
+
+# Caches
+.cache/
+
