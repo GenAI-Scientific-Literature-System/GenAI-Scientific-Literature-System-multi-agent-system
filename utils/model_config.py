@@ -1,4 +1,5 @@
 DEFAULT_CLAIM_EXTRACTION_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_EVIDENCE_COLLECTION_MODEL = "llama-3.3-70b-versatile"
 
 CLAIM_EXTRACTION_FALLBACK_MODELS = [
     "llama-3.3-70b-versatile",
@@ -9,6 +10,14 @@ CLAIM_EXTRACTION_FALLBACK_MODELS = [
     "qwen/qwen3-32b",
     "openai/gpt-oss-20b",
     "llama-3.1-8b-instant",
+]
+
+EVIDENCE_COLLECTION_FALLBACK_MODELS = [
+    "openai/gpt-oss-120b",
+    "llama-3.3-70b-versatile",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "moonshotai/kimi-k2-instruct-0905",
+    "openai/gpt-oss-20b",
 ]
 
 
