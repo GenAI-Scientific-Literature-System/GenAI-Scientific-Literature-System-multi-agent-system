@@ -1,0 +1,32 @@
+[
+  {
+    "id": "merlin_bench_001",
+    "title": "High-Resource NLP Claim",
+    "text": "We demonstrate that large language models significantly outperform traditional retrieval methods on question answering tasks when fine-tuned on domain-specific corpora. Our experiments assume a high-resource setting with GPU access and clean, well-formatted English text. Results show 12% F1 improvement over BM25 baseline.",
+    "gold_claims": [
+      {"subject": "LLMs", "predicate": "outperforms", "object": "retrieval methods", "domain": "NLP"}
+    ],
+    "gold_assumptions": [
+      {"type": "scope", "constraint": "high-resource setting", "explicit": true},
+      {"type": "domain", "constraint": "English text only", "explicit": true},
+      {"type": "method", "constraint": "GPU access required", "explicit": true}
+    ],
+    "gold_relation_with": "merlin_bench_002",
+    "gold_relation_type": "conditional"
+  },
+  {
+    "id": "merlin_bench_002",
+    "title": "Low-Resource Counter-Claim",
+    "text": "We show that retrieval-augmented generation fails to consistently outperform BM25 on low-resource domain-specific tasks. Under limited training data and noisy text inputs, traditional IR methods prove more robust. We assume a low-resource setting with CPU-only infrastructure.",
+    "gold_claims": [
+      {"subject": "RAG", "predicate": "underperforms", "object": "BM25", "domain": "NLP"}
+    ],
+    "gold_assumptions": [
+      {"type": "scope", "constraint": "low-resource setting", "explicit": true},
+      {"type": "method", "constraint": "CPU-only infrastructure", "explicit": true},
+      {"type": "data", "constraint": "noisy text inputs", "explicit": true}
+    ],
+    "gold_relation_with": "merlin_bench_001",
+    "gold_relation_type": "conditional"
+  }
+]
