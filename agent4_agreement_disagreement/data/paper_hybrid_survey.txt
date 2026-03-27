@@ -1,0 +1,12 @@
+Hybrid Architectures in NLP: A Comparative Survey
+
+This survey presents a systematic comparison of 47 hybrid architectures combining attention and convolution for NLP.
+We find that neither pure attention nor pure convolution is universally superior across all task types and domains.
+Our analysis shows that task-specific inductive biases determine the optimal architecture choice in most cases.
+Results from 47 benchmarks indicate that hybrid models outperform single-paradigm models by an average of 3.2% on standard NLP evaluations.
+We demonstrate that computational cost is the primary bottleneck in real-world deployment scenarios.
+The survey identifies several open questions including optimal mixing ratios, training strategies, and robustness under distribution shift.
+We observe that pre-training objectives significantly interact with architectural choices in ways that are not yet well understood.
+Future work should explore dynamic architecture selection mechanisms based on input characteristics and downstream task requirements.
+We propose that the community adopt unified benchmarking protocols to enable fair cross-architecture comparisons.
+Our analysis reveals that hybrid models are underexplored in low-resource and multilingual settings.
