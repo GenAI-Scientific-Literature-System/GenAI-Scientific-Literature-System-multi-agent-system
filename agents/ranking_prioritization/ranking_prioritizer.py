@@ -46,7 +46,55 @@ class RankingPrioritizer:
     def heuristic_rank(self, insights):
         return rank_insights_heuristically(insights)
 
-    def rank(self, insights):
+    def _build_insights_from_components(self, claims, reliability, agreements, uncertainties):
+        reliability_by_paper = {
+            (r.get("paper_id") or ""): r.get("reliability", {})
+            for r in (reliability or [])
+        }
+        agreement_by_paper = {
+            (a.get("paper_id") or ""): a
+            for a in (agreements or [])
+        }
+        uncertainty_by_paper = {
+            (u.get("paper_id") or ""): u
+            for u in (uncertainties or [])
+        }
+
+        insights = []
+        for c in claims or []:
+            paper_id = c.get("focal_paper_id") or c.get("paper_id") or ""
+            rel = reliability_by_paper.get(paper_id, {}) or {}
+            ag = agreement_by_paper.get(paper_id, {}) or {}
+            un = uncertainty_by_paper.get(paper_id, {}) or {}
+
+            supporting = c.get("supporting", []) or []
+            contradicting = c.get("contradicting", []) or []
+            inconclusive = c.get("inconclusive", []) or []
+
+            insights.append(
+                {
+                    "paper_id": paper_id,
+                    "title": c.get("focal_paper_title") or c.get("title", ""),
+                    "claim": c.get("claim", ""),
+                    "reliability_score": rel.get("score", rel.get("reliability_score", 5)),
+                    "evidence_count": len(supporting) + len(contradicting) + len(inconclusive),
+                    "agreement_score": ag.get("agreement_score", 0),
+                    "conflict_score": ag.get("conflict_score", 0),
+                    "novelty_score": max(0, 10 - un.get("uncertainty_score", 5)),
+                }
+            )
+
+        return insights
+
+    def rank(self, insights=None, *, claims=None, evidence=None, reliability=None, agreements=None, uncertainties=None):
+        if insights is None:
+            insights = self._build_insights_from_components(
+                claims=claims or evidence or [],
+                reliability=reliability or [],
+                agreements=agreements or [],
+                uncertainties=uncertainties or [],
+            )
+
         if self.use_llm:
             llm_result = self.llm_rank(insights)
             if llm_result:
