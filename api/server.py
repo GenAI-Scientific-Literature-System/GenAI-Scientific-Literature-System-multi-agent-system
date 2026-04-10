@@ -4,6 +4,25 @@ Endpoints: health, upload (PDF), analyse, sample, cache/clear
 """
 import logging
 import os
+
+# ── Load .env before any other imports touch os.environ ──────────────────────
+def _load_dotenv_early():
+    try:
+        from dotenv import load_dotenv
+        _here = os.path.dirname(os.path.abspath(__file__))
+        for _candidate in [
+            os.path.join(_here, "..", "..", ".env"),   # integrated/.env
+            os.path.join(_here, "..", ".env"),
+            os.path.join(os.getcwd(), ".env"),
+        ]:
+            if os.path.isfile(_candidate):
+                load_dotenv(_candidate, override=False)
+                break
+    except ImportError:
+        pass
+
+_load_dotenv_early()
+
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 

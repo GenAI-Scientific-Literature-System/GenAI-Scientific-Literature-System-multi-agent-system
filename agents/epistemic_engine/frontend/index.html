@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Epistemic Engine — Scientific Reasoning System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Mono:wght@300;400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-mark">ε</span>
+        <div class="brand-text">
+          <span class="brand-name">Epistemic Engine</span>
+          <span class="brand-sub">Scientific Reasoning System · 6-Agent Pipeline</span>
+        </div>
+      </div>
+      <div class="header-status">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">Checking...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Pipeline Position Banner -->
+  <div class="pipeline-banner">
+    <div class="pipeline-banner-inner">
+
+      <!-- Stage: Madhav (Agents 1–3) — upstream, read-only context -->
+      <div class="pipeline-stage stage-upstream">
+        <div class="stage-owner">Madhav</div>
+        <div class="stage-agents">
+          <div class="stage-agent agent-done">
+            <span class="agent-num">1</span>
+            <span class="agent-name">Claim Extraction</span>
+          </div>
+          <div class="stage-connector">→</div>
+          <div class="stage-agent agent-done">
+            <span class="agent-num">2</span>
+            <span class="agent-name">Evidence Collection</span>
+          </div>
+          <div class="stage-connector">→</div>
+          <div class="stage-agent agent-done">
+            <span class="agent-num">3</span>
+            <span class="agent-name">Reliability Assessment</span>
+          </div>
+        </div>
+        <div class="stage-desc">Extracts claims, gathers evidence, and assesses study reliability from retrieved papers</div>
+      </div>
+
+      <!-- Arrow into this module -->
+      <div class="pipeline-arrow pipeline-arrow-in">
+        <div class="arrow-line"></div>
+        <div class="arrow-label">Verified hypotheses<br/>+ evidence packages</div>
+        <div class="arrow-head">▶</div>
+      </div>
+
+      <!-- Stage: THIS MODULE (Agents 4–5) — active -->
+      <div class="pipeline-stage stage-active">
+        <div class="stage-owner stage-owner-active">This Module</div>
+        <div class="stage-agents">
+          <div class="stage-agent agent-active">
+            <span class="agent-num">4</span>
+            <span class="agent-name">Hypothesis Compatibility</span>
+          </div>
+          <div class="stage-connector stage-connector-active">→</div>
+          <div class="stage-agent agent-active">
+            <span class="agent-num">5</span>
+            <span class="agent-name">Epistemic Boundary</span>
+          </div>
+        </div>
+        <div class="stage-sync-note">
+          <span class="sync-icon">⇄</span>
+          Agent 4 output feeds Agent 5 — pairwise compatibility drives boundary stress-tests
+        </div>
+        <div class="stage-desc">Simulates hypothesis world-models, detects conflicts, then maps epistemic boundaries and research gaps</div>
+      </div>
+
+      <!-- Arrow out of this module -->
+      <div class="pipeline-arrow pipeline-arrow-out">
+        <div class="arrow-line"></div>
+        <div class="arrow-label">Compatibility matrix<br/>+ epistemic boundaries</div>
+        <div class="arrow-head">▶</div>
+      </div>
+
+      <!-- Stage: Roshini (Agent 6) — downstream -->
+      <div class="pipeline-stage stage-downstream">
+        <div class="stage-owner">Roshini</div>
+        <div class="stage-agents">
+          <div class="stage-agent agent-done">
+            <span class="agent-num">6</span>
+            <span class="agent-name">Ranking & Insights</span>
+          </div>
+        </div>
+        <div class="stage-desc">Ranks and prioritises insights across papers, feeds the integrated dashboard and export reports</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <nav class="tab-nav">
+    <div class="tab-nav-inner">
+      <button class="tab-btn active" data-tab="input">Input</button>
+      <button class="tab-btn" data-tab="agreements" id="tab-agreements">Agreement Explorer</button>
+      <button class="tab-btn" data-tab="uncertainties" id="tab-uncertainties">Uncertainty Dashboard</button>
+      <button class="tab-btn" data-tab="matrix" id="tab-matrix">Compatibility Matrix</button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- ════════ INPUT TAB ════════ -->
+    <section class="tab-panel active" id="panel-input">
+      <div class="panel-header">
+        <h2 class="panel-title">Hypothesis Input</h2>
+        <p class="panel-desc">Define scientific hypotheses for simulation. Each must include paper ID, assumptions, and variables for rigorous analysis.</p>
+      </div>
+
+      <div class="input-area">
+        <div class="context-row">
+          <label class="field-label">Research Context</label>
+          <input type="text" id="contextInput" class="field-input" placeholder="e.g., Mechanisms of exercise-induced blood pressure reduction" />
+        </div>
+
+        <div class="hypotheses-container" id="hypothesesContainer">
+          <!-- Hypothesis cards injected by JS -->
+        </div>
+
+        <div class="input-actions">
+          <button class="btn-ghost" id="addHypBtn">+ Add Hypothesis</button>
+          <button class="btn-ghost" id="loadSampleBtn">↓ Load Sample</button>
+          <div class="spacer"></div>
+          <button class="btn-primary" id="runBtn">
+            <span class="btn-label">Run Analysis</span>
+            <span class="btn-agents">Agent 4 → Agent 5</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Running state -->
+      <div class="running-overlay" id="runningOverlay" style="display:none">
+        <div class="running-inner">
+          <div class="running-pipeline">
+            <div class="run-agent" id="runAgent4">
+              <div class="run-agent-dot"></div>
+              <div class="run-agent-label">Agent 4<br/><span>Compatibility</span></div>
+            </div>
+            <div class="run-connector" id="runConnector">——</div>
+            <div class="run-agent" id="runAgent5">
+              <div class="run-agent-dot"></div>
+              <div class="run-agent-label">Agent 5<br/><span>Boundaries</span></div>
+            </div>
+          </div>
+          <div class="running-text">
+            <p class="running-stage" id="runningStage">Initializing pipeline...</p>
+            <p class="running-note">Simulating hypothesis worlds · Detecting epistemic boundaries</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ AGREEMENTS TAB ════════ -->
+    <section class="tab-panel" id="panel-agreements">
+      <div class="panel-header">
+        <h2 class="panel-title">Agreement Explorer</h2>
+        <p class="panel-desc">Pairwise hypothesis compatibility — simulated by Agent 4 via world-model reasoning.</p>
+        <div class="agent-scope-tag">Agent 4 output · feeds Agent 5</div>
+        <div class="summary-strip" id="agreementSummary"></div>
+      </div>
+      <div class="results-grid" id="agreementsGrid">
+        <div class="empty-state">Run an analysis to see results.</div>
+      </div>
+    </section>
+
+    <!-- ════════ UNCERTAINTIES TAB ════════ -->
+    <section class="tab-panel" id="panel-uncertainties">
+      <div class="panel-header">
+        <h2 class="panel-title">Uncertainty Dashboard</h2>
+        <p class="panel-desc">Epistemic boundaries and research gaps discovered by Agent 5 via stress testing.</p>
+        <div class="agent-scope-tag">Agent 5 output · consumed by Agent 6 (Roshini)</div>
+        <div class="filter-row" id="uncertaintyFilters">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="GENERALIZATION_FAILURE">Generalization Failure</button>
+          <button class="filter-btn" data-filter="ASSUMPTION_BREAKDOWN">Assumption Breakdown</button>
+          <button class="filter-btn" data-filter="UNEXPLORED_DIMENSION">Unexplored Dimension</button>
+        </div>
+      </div>
+      <div class="uncertainty-list" id="uncertaintyList">
+        <div class="empty-state">Run an analysis to see results.</div>
+      </div>
+    </section>
+
+    <!-- ════════ MATRIX TAB ════════ -->
+    <section class="tab-panel" id="panel-matrix">
+      <div class="panel-header">
+        <h2 class="panel-title">Compatibility Matrix</h2>
+        <p class="panel-desc">Heatmap of world-model divergence scores across all hypothesis pairs.</p>
+        <div class="agent-scope-tag">Agent 4 output · divergence scores used by Agent 5 for boundary targeting</div>
+      </div>
+      <div class="matrix-wrapper" id="matrixWrapper">
+        <div class="empty-state">Run an analysis to see the matrix.</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ════ DETAIL MODAL ════ -->
+  <div class="modal-backdrop" id="modalBackdrop" style="display:none">
+    <div class="modal-box" id="modalBox">
+      <button class="modal-close" id="modalClose">✕</button>
+      <div class="modal-content" id="modalContent"></div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
