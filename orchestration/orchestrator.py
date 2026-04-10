@@ -8,8 +8,8 @@ from monitoring.performance_tracker import PerformanceTracker
 from agents.claim_extraction import ClaimExtractor
 from agents.evidence_collection import EvidenceCollector
 from agents.reliability_analysis import ReliabilityAnalyzer
-from agents.agreement_detection import AgreementDetector
-from agents.uncertainty_detection import UncertaintyDetector
+from agents.agent4_agreement_disagreement import AgreementDetector
+from agents.agent5_uncertainty_gap import UncertaintyDetector
 from agents.ranking_prioritization import RankingPrioritizer
 
 
