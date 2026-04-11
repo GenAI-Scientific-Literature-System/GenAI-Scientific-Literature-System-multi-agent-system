@@ -8,7 +8,7 @@ UPGRADE: retriever fetches the most relevant chunk per claim
 import logging
 from typing import List, Tuple, Optional
 from src.models.schemas import Claim
-from src.mistral_client import call_mistral, sanitize_for_prompt
+from src.llm_client import call_llm, sanitize_for_prompt
 from src.hallucination_guard import verify_evidence_spans
 from config import EVIDENCE_PROMPT
 
@@ -42,7 +42,7 @@ def attribute_evidence(
 
     prompt = EVIDENCE_PROMPT.format(claims=compact, text=context)
 
-    result = call_mistral(
+    result = call_llm(
         prompt,
         system="Return only a JSON object with an 'evidence' array. No prose.",
         max_tokens=600,

@@ -1,5 +1,5 @@
 """
-MERLIN Mistral AI Client
+MERLIN LLM Client
 Fixes:
   [1] sanitize_for_prompt() — strips chars that break JSON output
   [2] _repair_json()        — recovers partial/truncated responses
@@ -15,13 +15,13 @@ from typing import Optional
 import requests
 
 from config import (
-    MISTRAL_API_KEY, MISTRAL_MODEL,
-    MISTRAL_MAX_TOKENS, MISTRAL_TEMP
+    GROQ_MODEL,
+    GROQ_MAX_TOKENS, GROQ_TEMP, GROQ_API_KEYS
 )
 
 logger = logging.getLogger(__name__)
 
-MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
+LLM_URL = "https://api.groq.com/openai/v1/chat/completions"
 _CACHE: dict = {}
 _TOKEN_LOG: dict = {"prompt": 0, "completion": 0, "calls": 0, "cache_hits": 0}
 
@@ -32,7 +32,7 @@ def sanitize_for_prompt(text: str, max_chars: int = 1800) -> str:
     """
     Make PDF-extracted text safe to embed inside a prompt string.
     Problems we're fixing:
-      • Raw "  in the text → breaks Mistral's JSON string output
+      • Raw "  in the text → breaks LLM's JSON string output
       • Raw \n \t \r     → causes unterminated-string errors in JSON
       • Control chars    → confuse the tokeniser
       • Very long text   → pushes response past max_tokens
@@ -138,16 +138,15 @@ def _repair_json(raw: str) -> Optional[object]:
 
 # ── [3] Main call ─────────────────────────────────────────────────────────────
 
-def call_mistral(
+def call_llm(
     prompt: str,
     system: str = "Return only valid JSON. No explanation.",
-    max_tokens: int = MISTRAL_MAX_TOKENS,
+    max_tokens: int = GROQ_MAX_TOKENS,
     use_cache: bool = True,
     retries: int = 3,
 ) -> Optional[object]:
     """
-    Call Mistral AI with retry + JSON repair.
-    All prompts must have text sanitized via sanitize_for_prompt() before call.
+    Call LLM with API key rotation per model + JSON repair.
     """
     key = hashlib.md5((system + prompt).encode()).hexdigest()
     if use_cache and key in _CACHE:
@@ -155,52 +154,86 @@ def call_mistral(
         _TOKEN_LOG["cache_hits"] += 1
         return _CACHE[key]
 
-    headers = {
-        "Authorization": f"Bearer {MISTRAL_API_KEY}",
-        "Content-Type":  "application/json",
-    }
-    # json_object mode requires the model to return a JSON *object* (not bare array).
-    # Prompts are written to return {"items":[...]} or {"result":{...}} so this is safe.
-    body = {
-        "model":           MISTRAL_MODEL,
-        "max_tokens":      max_tokens,
-        "temperature":     MISTRAL_TEMP,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user",   "content": prompt},
-        ],
-    }
+    fallback_models = [
+        GROQ_MODEL,
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768"
+    ]
+    
+    if not GROQ_API_KEYS:
+        logger.error("No Groq API keys found.")
+        return None
 
-    for attempt in range(retries):
-        try:
-            resp = requests.post(MISTRAL_URL, headers=headers, json=body, timeout=40)
-            resp.raise_for_status()
-            rj  = resp.json()
-            raw = rj["choices"][0]["message"]["content"].strip()
-            # Track real token usage from Mistral response
-            usage = rj.get("usage", {})
-            _TOKEN_LOG["prompt"]     += usage.get("prompt_tokens", 0)
-            _TOKEN_LOG["completion"] += usage.get("completion_tokens", 0)
-            _TOKEN_LOG["calls"]      += 1
+    # We try each model
+    for current_model in fallback_models:
+        body = {
+            "model":           current_model,
+            "max_tokens":      max_tokens,
+            "temperature":     GROQ_TEMP,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user",   "content": prompt},
+            ],
+        }
 
-            parsed = _repair_json(raw)
-            if parsed is not None:
-                if use_cache:
-                    _CACHE[key] = parsed
-                return parsed
+        # For every model we try every api key until it works
+        model_success = False
+        import random
+        keys_to_try = GROQ_API_KEYS.copy()
+        random.shuffle(keys_to_try) # Optional: distribute load randomly
+        
+        for idx, api_key in enumerate(keys_to_try):
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type":  "application/json",
+            }
+            
+            for attempt in range(retries):
+                try:
+                    resp = requests.post(LLM_URL, headers=headers, json=body, timeout=40)
+                    
+                    # 429 = Ratelimit, switch to next key without more retries on this key for this request
+                    if resp.status_code == 429:
+                        logger.warning("Agent hit 429 on %s for key #%d. Trying next key.", current_model, idx+1)
+                        # Break out of the 'attempt' loop to immediately rotate to next API key
+                        break
+                        
+                    resp.raise_for_status()
+                    rj  = resp.json()
+                    raw = rj["choices"][0]["message"]["content"].strip()
+                    
+                    # Track real token usage
+                    usage = rj.get("usage", {})
+                    _TOKEN_LOG["prompt"]     += usage.get("prompt_tokens", 0)
+                    _TOKEN_LOG["completion"] += usage.get("completion_tokens", 0)
+                    _TOKEN_LOG["calls"]      += 1
 
-            logger.warning("Mistral attempt %d: JSON repair failed.", attempt + 1)
+                    parsed = _repair_json(raw)
+                    if parsed is not None:
+                        if use_cache:
+                            _CACHE[key] = parsed
+                        return parsed
 
-        except requests.RequestException as e:
-            logger.warning("Mistral attempt %d network error: %s", attempt + 1, e)
-        except (KeyError, IndexError) as e:
-            logger.warning("Mistral attempt %d bad response shape: %s", attempt + 1, e)
+                    logger.warning("LLM JSON repair failed on model %s.", current_model)
 
-        if attempt < retries - 1:
-            time.sleep(2 ** attempt)
+                except requests.RequestException as e:
+                    logger.warning("Network error on %s: %s", current_model, e)
+                except (KeyError, IndexError) as e:
+                    logger.warning("Bad response shape on %s: %s", current_model, e)
 
-    logger.error("All Mistral retries exhausted.")
+                if attempt < retries - 1:
+                    time.sleep(2 ** attempt)
+            else:
+                # If the 'attempt' loop didn't break out (meaning no 429), but failed continuously 
+                # (e.g. timeout, JSON schema failure), we also try the next key
+                pass
+                
+        # If we exhausted ALL keys for this model without returning a parsed object,
+        # we fall back to the NEXT model in the list.
+        logger.warning("Exhausted all API keys for model: %s. Falling back to next model.", current_model)
+
+    logger.error("All retries, API Keys, and fallback models exhausted.")
     return None
 
 
@@ -211,7 +244,7 @@ def clear_cache():
 
 
 def get_token_usage() -> dict:
-    """Return real Mistral token counts for this pipeline run."""
+    """Return real LLM token counts for this pipeline run."""
     total = _TOKEN_LOG["prompt"] + _TOKEN_LOG["completion"]
     return {
         "prompt_tokens":     _TOKEN_LOG["prompt"],

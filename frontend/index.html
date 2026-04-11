@@ -36,26 +36,20 @@
 
     <div class="sidebar-section">
       <div class="section-label">Input</div>
-      <div class="drop-zone" id="drop-zone" tabindex="0" role="button">
-        <div class="drop-inner">
-          <svg class="drop-svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
-            <rect x="5" y="3" width="17" height="22" rx="2" stroke="currentColor" stroke-width="1.4" fill="none"/>
-            <path d="M17 3v7h5" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/>
-            <circle cx="24" cy="24" r="6" fill="var(--accent)" opacity="0.12" stroke="var(--accent)" stroke-width="1.4"/>
-            <path d="M24 21v6M21 24h6" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/>
-          </svg>
-          <p class="drop-title">Drop PDFs here</p>
-          <p class="drop-sub">or <span class="link">browse files</span></p>
-          <p class="drop-limit">Up to 5 PDFs · 32 MB each</p>
+      <div class="query-zone">
+        <label class="query-label" for="query-input">Research Query</label>
+        <textarea id="query-input" class="query-input" rows="4" placeholder="Example: Do large language models hallucinate in medical contexts?"></textarea>
+        <div class="query-options">
+          <label class="query-topk-label" for="top-k-input">Papers per source</label>
+          <input id="top-k-input" class="query-topk-input" type="number" min="1" max="20" value="5"/>
         </div>
-        <input type="file" id="file-input" accept=".pdf" multiple style="display:none"/>
       </div>
       <div id="file-list" class="file-list hidden"></div>
       <div id="upload-warnings" class="warning-box hidden"></div>
     </div>
 
     <div class="sidebar-actions">
-      <button class="btn-ghost" id="btn-clear-files" style="display:none">✕ Clear</button>
+      <button class="btn-ghost" id="btn-clear-files">✕ Clear Query</button>
       <button class="btn-run" id="btn-analyse" disabled>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><polygon points="3,2 12,7 3,12" fill="currentColor"/></svg>
         Run Analysis
@@ -140,7 +134,7 @@
         <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><polygon points="24,4 42,14 42,34 24,44 6,34 6,14" stroke="var(--accent)" stroke-width="1.5" fill="none" opacity="0.4"/><polygon points="24,14 33,19 33,29 24,34 15,29 15,19" stroke="var(--accent)" stroke-width="1" fill="var(--accent)" opacity="0.08"/></svg>
       </div>
       <p class="empty-title">No analysis yet</p>
-      <p class="empty-sub">Upload a PDF and run the pipeline to see claims, assumptions, gaps and the Epistemic Dependency Graph.</p>
+      <p class="empty-sub">Enter a query and run the pipeline to fetch papers, then see claims, assumptions, gaps and the Epistemic Dependency Graph.</p>
     </div>
 
     <!-- Results -->

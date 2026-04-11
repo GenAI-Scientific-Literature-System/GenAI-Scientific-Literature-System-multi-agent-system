@@ -22,7 +22,7 @@ from typing import List, Tuple, Dict
 import networkx as nx
 
 from src.models.schemas import Claim, Agreement, ResearchGap, GapType, RelationType
-from src.mistral_client import call_mistral
+from src.llm_client import call_llm
 from src.hallucination_guard import filter_hallucinated_gaps
 from src.graph.edg import EpistemicDependencyGraph
 from config import UNCERTAINTY_CONFLICT_WEIGHT, UNCERTAINTY_EVIDENCE_WEIGHT, UNCERTAINTY_STABILITY_WEIGHT
@@ -130,7 +130,7 @@ def _label_gap(claim: Claim, score: float, bc_val: float, deg: int) -> dict:
         "betweenness": round(bc_val, 3),
         "uncertainty": claim.uncertainty,
     }, separators=(",", ":"))
-    res = call_mistral(payload, system=_GAP_LABEL_SYSTEM, max_tokens=80)
+    res = call_llm(payload, system=_GAP_LABEL_SYSTEM, max_tokens=80)
     if res and isinstance(res, dict) and res.get("gap", "").strip():
         return res
     return {

@@ -34,7 +34,7 @@ from src.retrieval                 import DocumentRetriever
 from src.struct                    import MERLINStruct
 from src.reasoning                 import formal_score
 from src.assumption_engine         import validate_all as ace_validate
-from src.mistral_client            import get_token_usage, reset_token_log
+from src.llm_client            import get_token_usage, reset_token_log
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +81,8 @@ class MERLINResult:
                 "hallucination_guards": self.hallucination_report.total_interventions,
                 "epistemic_loss":       epistemic_loss,
                 "avg_uncertainty":      round(avg_u, 3),
-                "mistral_tokens":       self.token_stats.get("mistral_total", 0),
-                "mistral_calls":        self.token_stats.get("mistral_calls", 0),
+                "llm_tokens":       self.token_stats.get("llm_total", 0),
+                "llm_calls":        self.token_stats.get("llm_calls", 0),
                 "cache_hits":           self.token_stats.get("cache_hits", 0),
                 "ace_rejected":         self.ace_report.get("rejected", 0),
             },
@@ -213,10 +213,10 @@ def run_pipeline(papers: List[Dict[str, str]]) -> MERLINResult:
     tok = get_token_usage()
     result.token_stats = {
         "chunks_indexed":     total_chunks,
-        "mistral_prompt":     tok["prompt_tokens"],
-        "mistral_completion": tok["completion_tokens"],
-        "mistral_total":      tok["total_tokens"],
-        "mistral_calls":      tok["api_calls"],
+        "llm_prompt":     tok["prompt_tokens"],
+        "llm_completion": tok["completion_tokens"],
+        "llm_total":      tok["total_tokens"],
+        "llm_calls":      tok["api_calls"],
         "cache_hits":         tok["cache_hits"],
         "text_sent_to_llm":   "NEVER after extraction phase",
     }

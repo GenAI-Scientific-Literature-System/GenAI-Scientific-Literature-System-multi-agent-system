@@ -7,7 +7,7 @@ UPGRADE: retriever fetches assumption-rich sections (limitations, setup, constra
 import logging
 from typing import List, Optional
 from src.models.schemas import Claim, Assumption, AssumptionType
-from src.mistral_client import call_mistral, sanitize_for_prompt
+from src.llm_client import call_llm, sanitize_for_prompt
 from config import ASSUMPTION_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def extract_assumptions(
 
     prompt = ASSUMPTION_PROMPT.format(text=context)
 
-    result = call_mistral(
+    result = call_llm(
         prompt,
         system="Return only a JSON object with an 'assumptions' array. No prose.",
         max_tokens=500,
@@ -38,7 +38,7 @@ def extract_assumptions(
 
     assumptions: List[Assumption] = []
     if not result:
-        logger.warning("Agent 6: No result from Mistral.")
+        logger.warning("Agent 6: No result from LLM.")
         return assumptions
 
     raw_list = result.get("assumptions", result) if isinstance(result, dict) else result

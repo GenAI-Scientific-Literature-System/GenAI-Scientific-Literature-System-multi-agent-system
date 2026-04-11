@@ -1,7 +1,7 @@
 """
 Agent 3: Normalisation
 Standardises claim predicates and domains for cross-paper comparison.
-Uses rule-based mapping first (zero tokens), falls back to Mistral only for ambiguous cases.
+Uses rule-based mapping first (zero tokens), falls back to LLM only for ambiguous cases.
 """
 import re
 import logging
@@ -42,7 +42,7 @@ def _normalise_field(text: str, mapping: dict) -> str:
 
 def normalise_claims(claims: List[Claim]) -> List[Claim]:
     """
-    Rule-based normalisation — zero Mistral tokens.
+    Rule-based normalisation — zero LLM tokens.
     Normalises predicates and domains for consistency.
     """
     for c in claims:

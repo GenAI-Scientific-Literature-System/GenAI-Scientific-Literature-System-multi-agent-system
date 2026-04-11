@@ -2,7 +2,7 @@
 MERLIN HallucinationGuard
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Grounded verification for all 5 hallucination vectors.
-All checks use local computation only — zero Mistral tokens.
+All checks use local computation only — zero LLM tokens.
 
 Vector map:
   [V1] Claim grounding      → extract_claims (Agent 1)

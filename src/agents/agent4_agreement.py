@@ -29,7 +29,7 @@ from typing import List, Tuple, Optional
 import networkx as nx
 
 from src.models.schemas import Claim, Agreement, RelationType
-from src.mistral_client import call_mistral
+from src.llm_client import call_llm
 from src.hallucination_guard import verify_agreement_reason
 from src.struct import MERLINStruct
 
@@ -161,7 +161,7 @@ def compute_agreements(claims: List[Claim], struct: MERLINStruct) -> List[Agreem
                 "C2_pred": cj_data.get("pred","")[:20],
                 "A1": A1[:3], "A2": A2[:3], "relation": relation,
             }, separators=(",",":"))
-            res = call_mistral(prompt, system=_REASON_SYSTEM, max_tokens=40)
+            res = call_llm(prompt, system=_REASON_SYSTEM, max_tokens=150)
             if res:
                 if isinstance(res, str):
                     raw = res

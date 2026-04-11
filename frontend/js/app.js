@@ -2,6 +2,8 @@
 const API = 'http://localhost:5000';
 let lastResult = null;
 let queuedFiles = [];
+const queryInput = document.getElementById('query-input');
+const topKInput = document.getElementById('top-k-input');
 
 /* ── THEME ─────────────────────────────────────────────────────────────── */
 (function () {
@@ -38,15 +40,24 @@ setInterval(checkHealth, 30000);
 const dropZone  = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('keydown', e => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
-});
-dropZone.addEventListener('dragenter', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', e => { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); addFiles([...e.dataTransfer.files]); });
-fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+if (dropZone && fileInput) {
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+  });
+  dropZone.addEventListener('dragenter', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', e => { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); addFiles([...e.dataTransfer.files]); });
+  fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+}
+
+if (queryInput) {
+  queryInput.addEventListener('input', () => {
+    const btnR = document.getElementById('btn-analyse');
+    btnR.disabled = !queryInput.value.trim();
+  });
+}
 
 function addFiles(files) {
   const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
@@ -63,6 +74,12 @@ function renderFileList() {
   const list = document.getElementById('file-list');
   const btnC = document.getElementById('btn-clear-files');
   const btnR = document.getElementById('btn-analyse');
+  if (queryInput) {
+    btnR.disabled = !queryInput.value.trim();
+    if (btnC) btnC.style.display = '';
+    if (list) { list.classList.add('hidden'); list.innerHTML = ''; }
+    return;
+  }
   if (!queuedFiles.length) {
     list.classList.add('hidden'); list.innerHTML = '';
     btnC.style.display = 'none'; btnR.disabled = true; return;
@@ -80,6 +97,10 @@ function renderFileList() {
 }
 document.getElementById('btn-clear-files').addEventListener('click', () => {
   queuedFiles = []; renderFileList(); clearWarnings();
+  if (queryInput) {
+    queryInput.value = '';
+    document.getElementById('btn-analyse').disabled = true;
+  }
 });
 function fmtBytes(b) {
   return b < 1024 ? b+'B' : b < 1048576 ? (b/1024).toFixed(1)+'KB' : (b/1048576).toFixed(1)+'MB';
@@ -141,11 +162,20 @@ document.getElementById('btn-load-sample').addEventListener('click', async () =>
 
 /* ── RUN ───────────────────────────────────────────────────────────────── */
 document.getElementById('btn-analyse').addEventListener('click', async () => {
-  if (!queuedFiles.length) return;
+  const query = queryInput ? queryInput.value.trim() : '';
+  if (!query && !queuedFiles.length) return;
+
   const btn = document.getElementById('btn-analyse');
   btn.disabled = true;
   showLoader();
+
   try {
+    if (query) {
+      await runAnalysisFromQuery(query);
+      btn.disabled = false;
+      return;
+    }
+
     const fd = new FormData();
     queuedFiles.forEach(f => fd.append('files[]', f));
     const up = await fetch(`${API}/api/upload`, { method: 'POST', body: fd });
@@ -170,6 +200,31 @@ async function runAnalysis(papers) {
     renderResults(lastResult);
   } catch (e) {
     hideLoader(); showWarning('Analysis failed: '+e.message);
+  }
+}
+
+async function runAnalysisFromQuery(query) {
+  showLoader();
+  animateSteps();
+
+  const requestedTopK = parseInt(topKInput?.value || '5', 10);
+  const topKPerSource = Number.isFinite(requestedTopK)
+    ? Math.max(1, Math.min(20, requestedTopK))
+    : 5;
+
+  try {
+    const r = await fetch(`${API}/api/run-query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, top_k_per_source: topKPerSource }),
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || 'Query analysis failed');
+    lastResult = body;
+    renderResults(lastResult);
+  } catch (e) {
+    hideLoader();
+    showWarning('Analysis failed: ' + e.message);
   }
 }
 

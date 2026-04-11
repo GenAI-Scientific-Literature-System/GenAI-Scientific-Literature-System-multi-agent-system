@@ -6,7 +6,7 @@ Tier 2: bigram overlap >= 0.50   → VERIFIED (score)
 Tier 3: unigram overlap >= 0.40  → WEAK     (score)
 Tier 4: local NLI (implicit only)→ upgrade/downgrade
 Else:                            → REJECTED (filtered out)
-Zero Mistral tokens.
+Zero LLM tokens.
 """
 import logging
 from typing import List
@@ -23,10 +23,19 @@ def _get_nli_pipeline():
     global _pipeline
     if _pipeline is None:
         try:
+            import torch
             from transformers import pipeline
             from config import NLI_MODEL_PRIMARY
-            _pipeline = pipeline("zero-shot-classification", model=NLI_MODEL_PRIMARY, device=-1)
-            logger.info("Agent 6.1: NLI pipeline loaded.")
+            
+            if torch.cuda.is_available():
+                device = 0
+            elif torch.backends.mps.is_available():
+                device = "mps"
+            else:
+                device = -1
+                
+            _pipeline = pipeline("zero-shot-classification", model=NLI_MODEL_PRIMARY, device=device)
+            logger.info("Agent 6.1: NLI pipeline loaded on device %s.", device)
         except Exception as e:
             logger.warning("Agent 6.1: NLI unavailable (%s). Guard-only mode.", e)
             _pipeline = "unavailable"

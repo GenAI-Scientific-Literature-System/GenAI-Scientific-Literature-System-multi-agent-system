@@ -21,8 +21,8 @@ from agents.claim_extraction import ClaimExtractor
 from agents.evidence_collection import EvidenceCollector
 from agents.reliability_analysis import ReliabilityAnalyzer
 from agents.ranking_prioritization import RankingPrioritizer
-from agents.agent4_agreement_disagreement import AgreementDetector
-from agents.agent5_uncertainty_gap import UncertaintyDetector
+from agents.agreement_detection import AgreementDetector
+from agents.uncertainty_detection import UncertaintyDetector
 from orchestration.execution_monitor import ExecutionMonitor
 from monitoring.logger import get_logger
 from monitoring.performance_tracker import PerformanceTracker
@@ -428,13 +428,43 @@ def run_pipeline(
         monitor.start("agent_6_ranking_prioritization")
         logger.info("Starting agent_6_ranking_prioritization")
 
-        ranked_insights = ranking_agent.rank(
-            claims=results,
-            evidence=results,
-            reliability=reliability_results,
-            agreements=agreement_results,
-            uncertainties=uncertainty_results,
-        )
+        # Build insights from previous agent results
+        reliability_by_paper = {
+            (r.get("paper_id") or ""): r.get("reliability", {})
+            for r in (reliability_results or [])
+        }
+        agreement_by_paper = {
+            (a.get("paper_id") or ""): a
+            for a in (agreement_results or [])
+        }
+        uncertainty_by_paper = {
+            (u.get("paper_id") or ""): u
+            for u in (uncertainty_results or [])
+        }
+
+        insights = []
+        for c in results or []:
+            paper_id = c.get("focal_paper_id") or c.get("paper_id") or ""
+            rel = reliability_by_paper.get(paper_id, {}) or {}
+            ag = agreement_by_paper.get(paper_id, {}) or {}
+            un = uncertainty_by_paper.get(paper_id, {}) or {}
+
+            supporting = c.get("supporting", []) or []
+            contradicting = c.get("contradicting", []) or []
+            inconclusive = c.get("inconclusive", []) or []
+
+            insights.append({
+                "paper_id": paper_id,
+                "title": c.get("focal_paper_title") or c.get("title", ""),
+                "claim": c.get("claim", ""),
+                "reliability_score": rel.get("score", rel.get("reliability_score", 5)),
+                "evidence_count": len(supporting) + len(contradicting) + len(inconclusive),
+                "agreement_score": ag.get("agreement_score", 0),
+                "conflict_score": ag.get("conflict_score", 0),
+                "novelty_score": max(0, 10 - un.get("uncertainty_score", 5)),
+            })
+
+        ranked_insights = ranking_agent.rank(insights)
 
         monitor.stop("agent_6_ranking_prioritization", status="success")
         duration = monitor.get("agent_6_ranking_prioritization").get("duration_sec", 0.0) or 0.0

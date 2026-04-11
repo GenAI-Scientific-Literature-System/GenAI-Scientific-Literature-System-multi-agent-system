@@ -9,7 +9,7 @@ UPGRADE: accepts a DocumentRetriever — sends only the relevant chunks
 import logging
 from typing import List, Tuple, Optional
 from src.models.schemas import Claim
-from src.mistral_client import call_mistral, sanitize_for_prompt
+from src.llm_client import call_llm, sanitize_for_prompt
 from src.hallucination_guard import filter_hallucinated_claims
 from config import CLAIM_PROMPT
 
@@ -35,7 +35,7 @@ def extract_claims(
 
     prompt = CLAIM_PROMPT.format(text=context)
 
-    result = call_mistral(
+    result = call_llm(
         prompt,
         system="You extract scientific claims. Return only a JSON object with a 'claims' array. No prose.",
         max_tokens=700,
@@ -43,7 +43,7 @@ def extract_claims(
 
     raw_claims: List[Claim] = []
     if not result:
-        logger.warning("Agent 1: No result from Mistral (paper='%s').", paper_id)
+        logger.warning("Agent 1: No result from LLM (paper='%s').", paper_id)
         return raw_claims, 0
 
     raw_list = result.get("claims", result) if isinstance(result, dict) else result
