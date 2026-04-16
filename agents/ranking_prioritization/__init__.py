@@ -1,1 +1,2 @@
-from .ranking_prioritizer import RankingPrioritizer
+from agents.ranking_prioritization.ranking_prioritization_agent import RankingPrioritizationAgent
+__all__ = ["RankingPrioritizationAgent"]

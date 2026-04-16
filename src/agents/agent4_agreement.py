@@ -29,7 +29,7 @@ from typing import List, Tuple, Optional
 import networkx as nx
 
 from src.models.schemas import Claim, Agreement, RelationType
-from src.llm_client import call_llm
+from src.llm_client import call_llm, sanitize_for_prompt
 from src.hallucination_guard import verify_agreement_reason
 from src.struct import MERLINStruct
 
@@ -42,6 +42,12 @@ def agreement(c1_id: str, c2_id: str, struct: MERLINStruct):
     """
     Formal set-operation agreement.  Zero LLM tokens.
     Returns (relation, confidence, basis, shared_ids).
+
+    OCP FIX: disjoint assumption sets no longer imply CONTRADICT.
+    Disjoint sets mean claims operate in non-overlapping epistemic
+    spaces — that is UNRELATED, not contradictory.
+    CONTRADICT is only raised by _predicate_heuristic when domains
+    match AND predicates are semantically opposing.
     """
     A1 = set(struct.claims.get(c1_id, {}).get("assumptions", []))
     A2 = set(struct.claims.get(c2_id, {}).get("assumptions", []))
@@ -50,11 +56,13 @@ def agreement(c1_id: str, c2_id: str, struct: MERLINStruct):
     if not A1 and not A2:
         return "unknown", 0.0, "no-assumptions", []
 
-    if A1 == A2:
+    if A1 == A2 and A1:
         return RelationType.AGREE, 1.0, "identical-sets", shared
 
     if A1.isdisjoint(A2):
-        return RelationType.CONTRADICT, 0.85, "disjoint-sets", []
+        # Disjoint assumption sets = claims make no shared epistemic commitments
+        # → UNRELATED, not contradictory (contradiction requires shared domain)
+        return RelationType.UNRELATED, 0.70, "disjoint-sets", []
 
     jaccard = len(A1 & A2) / len(A1 | A2)
     return RelationType.CONDITIONAL, round(jaccard, 3), "partial-overlap", shared
@@ -161,7 +169,7 @@ def compute_agreements(claims: List[Claim], struct: MERLINStruct) -> List[Agreem
                 "C2_pred": cj_data.get("pred","")[:20],
                 "A1": A1[:3], "A2": A2[:3], "relation": relation,
             }, separators=(",",":"))
-            res = call_llm(prompt, system=_REASON_SYSTEM, max_tokens=150)
+            res = call_llm(prompt, system=_REASON_SYSTEM, max_tokens=40)
             if res:
                 if isinstance(res, str):
                     raw = res

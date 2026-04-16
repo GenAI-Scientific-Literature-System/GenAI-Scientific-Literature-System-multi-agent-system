@@ -43,7 +43,7 @@ def extract_claims(
 
     raw_claims: List[Claim] = []
     if not result:
-        logger.warning("Agent 1: No result from LLM (paper='%s').", paper_id)
+        logger.warning("Agent 1: No result from Mistral (paper='%s').", paper_id)
         return raw_claims, 0
 
     raw_list = result.get("claims", result) if isinstance(result, dict) else result

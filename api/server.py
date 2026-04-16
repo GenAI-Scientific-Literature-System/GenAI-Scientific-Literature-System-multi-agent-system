@@ -4,14 +4,32 @@ Endpoints: health, upload (PDF), analyse, sample, cache/clear
 """
 import logging
 import os
+
+# ── Load .env before any other imports touch os.environ ──────────────────────
+def _load_dotenv_early():
+    try:
+        from dotenv import load_dotenv
+        _here = os.path.dirname(os.path.abspath(__file__))
+        for _candidate in [
+            os.path.join(_here, "..", "..", ".env"),   # integrated/.env
+            os.path.join(_here, "..", ".env"),
+            os.path.join(os.getcwd(), ".env"),
+        ]:
+            if os.path.isfile(_candidate):
+                load_dotenv(_candidate, override=False)
+                break
+    except ImportError:
+        pass
+
+_load_dotenv_early()
+
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
 from src.pipeline import run_pipeline
 from src.pdf_extractor import extract_text_from_pdf, is_pdf_available
-from src.llm_client import clear_cache
+from src.mistral_client import clear_cache
 from src.document_store  import clear as clear_doc_store
-from pipeline.retrieval import Retriever
 
 logging.basicConfig(
     level=logging.INFO,
@@ -123,69 +141,6 @@ def analyse():
         return jsonify(result.to_dict())
     except Exception as e:
         logger.exception("Pipeline error: %s", e)
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/run-query", methods=["POST"])
-def run_query():
-    """
-    POST /api/run-query   application/json
-    Body: { "query": "...", "top_k_per_source": 5 }
-    Fetches papers from connectors and runs the same analysis pipeline.
-    """
-    data = request.get_json(silent=True) or {}
-    query = (data.get("query") or "").strip()
-    if not query:
-        return jsonify({"error": "Missing or empty 'query'."}), 400
-
-    try:
-        requested_top_k = int(data.get("top_k_per_source", 5))
-    except (TypeError, ValueError):
-        requested_top_k = 5
-    top_k_per_source = max(1, min(20, requested_top_k))
-
-    domains = data.get("domains")
-    if not isinstance(domains, list) or not domains:
-        domains = ["medical", "ml", "biology", "general"]
-
-    try:
-        retriever = Retriever(top_k_per_source=top_k_per_source, debug=False)
-        fetched_papers = retriever.retrieve(query=query, domains=domains)
-    except Exception as e:
-        logger.exception("Retrieval failed for query '%s': %s", query, e)
-        return jsonify({"error": f"Retrieval failed: {str(e)}"}), 500
-
-    if not fetched_papers:
-        return jsonify({"error": "No papers were retrieved for this query."}), 422
-
-    # Keep analysis bounded and deterministic for frontend latency.
-    analysis_papers = []
-    for p in fetched_papers[:20]:
-        abstract = (p.get("abstract") or "").strip()
-        if not abstract:
-            continue
-
-        paper_id = p.get("paper_id") or p.get("id") or p.get("doi") or p.get("url") or "paper"
-        analysis_papers.append({
-            "id": str(paper_id),
-            "text": abstract,
-        })
-
-    if not analysis_papers:
-        return jsonify({"error": "Retrieved papers had no usable abstract text."}), 422
-
-    try:
-        result = run_pipeline(analysis_papers[:5])
-        payload = result.to_dict()
-        payload["retrieval_meta"] = {
-            "query": query,
-            "top_k_per_source": top_k_per_source,
-            "retrieved_raw": len(fetched_papers),
-            "used_for_analysis": len(analysis_papers[:5]),
-        }
-        return jsonify(payload)
-    except Exception as e:
-        logger.exception("Pipeline error for query '%s': %s", query, e)
         return jsonify({"error": str(e)}), 500
 
 

@@ -22,7 +22,7 @@ from typing import List, Tuple, Dict
 import networkx as nx
 
 from src.models.schemas import Claim, Agreement, ResearchGap, GapType, RelationType
-from src.llm_client import call_llm
+from src.llm_client import call_llm, sanitize_for_prompt
 from src.hallucination_guard import filter_hallucinated_gaps
 from src.graph.edg import EpistemicDependencyGraph
 from config import UNCERTAINTY_CONFLICT_WEIGHT, UNCERTAINTY_EVIDENCE_WEIGHT, UNCERTAINTY_STABILITY_WEIGHT
