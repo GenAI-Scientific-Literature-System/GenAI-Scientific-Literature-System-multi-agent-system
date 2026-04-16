@@ -23,6 +23,7 @@ between non-adjacent claims via shortest path analysis.
 """
 import json
 import logging
+import re
 from itertools import combinations
 from typing import List, Tuple, Optional
 
@@ -43,11 +44,7 @@ def agreement(c1_id: str, c2_id: str, struct: MERLINStruct):
     Formal set-operation agreement.  Zero LLM tokens.
     Returns (relation, confidence, basis, shared_ids).
 
-    OCP FIX: disjoint assumption sets no longer imply CONTRADICT.
-    Disjoint sets mean claims operate in non-overlapping epistemic
-    spaces — that is UNRELATED, not contradictory.
-    CONTRADICT is only raised by _predicate_heuristic when domains
-    match AND predicates are semantically opposing.
+    Formal set-operation agreement with deterministic output.
     """
     A1 = set(struct.claims.get(c1_id, {}).get("assumptions", []))
     A2 = set(struct.claims.get(c2_id, {}).get("assumptions", []))
@@ -60,9 +57,7 @@ def agreement(c1_id: str, c2_id: str, struct: MERLINStruct):
         return RelationType.AGREE, 1.0, "identical-sets", shared
 
     if A1.isdisjoint(A2):
-        # Disjoint assumption sets = claims make no shared epistemic commitments
-        # → UNRELATED, not contradictory (contradiction requires shared domain)
-        return RelationType.UNRELATED, 0.70, "disjoint-sets", []
+        return RelationType.CONTRADICT, 1.0, "disjoint-sets", []
 
     jaccard = len(A1 & A2) / len(A1 | A2)
     return RelationType.CONDITIONAL, round(jaccard, 3), "partial-overlap", shared
@@ -72,9 +67,29 @@ def _predicate_heuristic(ci_data: dict, cj_data: dict) -> Tuple[str, float]:
     """Fast structural pre-check for claims with no assumptions."""
     pi, pj = ci_data.get("pred", ""), cj_data.get("pred", "")
     di, dj = ci_data.get("domain", ""), cj_data.get("domain", "")
-    if di and dj and di != dj:
-        return RelationType.UNRELATED, 0.92
-    opposing = {("outperforms","underperforms"),("improves","reduces"),("demonstrates","fails")}
+    oi, oj = str(ci_data.get("obj", "")).lower(), str(cj_data.get("obj", "")).lower()
+    si, sj = str(ci_data.get("subj", "")).lower(), str(cj_data.get("subj", "")).lower()
+
+    def _has_negation(text: str) -> bool:
+        return bool(re.search(r"\b(no|not|none|lack|lacks|without|absence|absent|negative|null)\b", text))
+
+    def _topic_tokens(text: str) -> set[str]:
+        return {t for t in re.split(r"\W+", text) if len(t) > 4}
+
+    # Strong contradiction signal: same predicate family, similar topic, opposite polarity.
+    if pi == pj and (_has_negation(oi) ^ _has_negation(oj)):
+        topic_i = _topic_tokens(f"{si} {oi}")
+        topic_j = _topic_tokens(f"{sj} {oj}")
+        if topic_i & topic_j:
+            return RelationType.CONTRADICT, 0.82
+
+    opposing = {
+        ("outperforms", "underperforms"),
+        ("improves", "reduces"),
+        ("demonstrates", "fails"),
+        ("supports", "refutes"),
+        ("associated_with", "not_associated"),
+    }
     if (pi, pj) in opposing or (pj, pi) in opposing:
         return RelationType.CONTRADICT, 0.85
     if pi == pj:

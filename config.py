@@ -23,6 +23,27 @@ def get_all_groq_api_keys():
 
 GROQ_API_KEYS = get_all_groq_api_keys()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+
+def get_groq_fallback_models(primary_model: str) -> list[str]:
+    """Return ordered fallback models including the primary model first."""
+    raw = os.getenv(
+        "GROQ_FALLBACK_MODELS",
+        "openai/gpt-oss-120b,llama-3.1-8b-instant,mixtral-8x7b-32768",
+    )
+    fallbacks = [m.strip() for m in raw.split(",") if m.strip()]
+
+    ordered = [primary_model] + fallbacks
+    seen = set()
+    deduped = []
+    for model in ordered:
+        if model not in seen:
+            seen.add(model)
+            deduped.append(model)
+    return deduped
+
+
+GROQ_FALLBACK_MODELS = get_groq_fallback_models(GROQ_MODEL)
 GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "8000"))
 GROQ_TEMP = float(os.getenv("GROQ_TEMP", "0.1"))
 
@@ -30,7 +51,9 @@ GROQ_TEMP = float(os.getenv("GROQ_TEMP", "0.1"))
 CLAIM_PROMPT = (
     "Extract scientific claims from the following text. "
     "Return JSON only with key 'claims' as an array of objects: "
-    "subject, predicate, object, method, domain.\n\n"
+    "subject, predicate, object, method, domain. "
+    "Preserve claim polarity exactly (e.g., keep negations like 'no', 'not', "
+    "'fails to', 'insufficient evidence', and support/refute language).\n\n"
     "Text:\n{text}"
 )
 

@@ -11,6 +11,7 @@
 <body>
 
 <header class="topbar">
+
   <div class="topbar-inner">
     <div class="brand">
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><polygon points="11,2 20,7 20,15 11,20 2,15 2,7" stroke="var(--accent)" stroke-width="1.5" fill="none"/><polygon points="11,6 16,9 16,13 11,16 6,13 6,9" fill="var(--accent)" opacity="0.2"/></svg>
@@ -44,23 +45,55 @@
           <input id="top-k-input" class="query-topk-input" type="number" min="1" max="20" value="5"/>
         </div>
       </div>
+
+      <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Upload PDF files">
+        <svg class="drop-svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M12 16V6M12 6L8 10M12 6L16 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="4" y="16" width="16" height="4" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+        <div class="drop-title">Drop PDFs or click to upload</div>
+        <div class="drop-sub">Supports up to 5 files, 32MB each</div>
+        <div class="drop-limit">Used when no query is provided</div>
+        <input id="file-input" type="file" accept="application/pdf" multiple class="hidden"/>
+      </div>
+
       <div id="file-list" class="file-list hidden"></div>
       <div id="upload-warnings" class="warning-box hidden"></div>
     </div>
 
     <div class="sidebar-actions">
       <button class="btn-ghost" id="btn-clear-files">✕ Clear Query</button>
-      <button class="btn-run" id="btn-analyse" disabled>
+      <button class="btn-run" id="btn-fetch" disabled>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><polygon points="3,2 12,7 3,12" fill="currentColor"/></svg>
+        Find Sources
+      </button>
+      <button class="btn-run" id="btn-analyse" style="display:none;">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><polygon points="3,2 12,7 3,12" fill="currentColor"/></svg>
         Run Analysis
       </button>
-      <button class="btn-ghost" id="btn-load-sample">Demo</button>
+      <div class="pipeline-status-card" id="pipeline-status-card" aria-live="polite">
+        <div class="pipeline-status-head">
+          <span class="pipeline-status-dot"></span>
+          <span class="pipeline-status-title">Pipeline Status</span>
+        </div>
+        <div class="pipeline-status-row">
+          <span class="pipeline-status-label">Status</span>
+          <span class="pipeline-status-value" id="pipeline-status-value">Idle</span>
+        </div>
+        <div class="pipeline-status-row">
+          <span class="pipeline-status-label">Stage</span>
+          <span class="pipeline-status-value" id="pipeline-stage-value">Ready</span>
+        </div>
+      </div>
+      <button class="btn-ghost" id="btn-clear-cache">Clear Cache</button>
+      <button class="btn-ghost" id="btn-export-csv">Export CSV</button>
+      <button class="btn-ghost" id="btn-export-pdf">Export PDF</button>
     </div>
 
     <!-- Token Dashboard -->
     <div class="token-dashboard" id="token-dashboard">
       <div class="token-header">
-        <span class="token-title">Mistral AI Tokens</span>
+        <span class="token-title">LLM Tokens</span>
         <span class="token-live" id="tok-live-badge">live</span>
       </div>
 
@@ -103,7 +136,13 @@
         </div>
       </div>
 
-      <p class="token-note">Phase 1 extracts via RAG chunks. Phase 2 reasons on IDs only — no raw text sent to Mistral.</p>
+      <p class="token-note">Phase 1 extracts via RAG chunks. Phase 2 reasons on IDs only — no raw text sent after extraction.</p>
+    </div>
+
+    <!-- Model Info -->
+    <div class="model-info" id="model-info">
+      <span class="model-label">Model:</span>
+      <span class="model-value" id="model-value">Loading…</span>
     </div>
 
   </aside>
@@ -115,7 +154,7 @@
     <div id="loader" class="loader hidden">
       <div class="loader-inner">
         <div class="loader-ring"></div>
-        <div class="pipeline-steps" id="pipeline-steps">
+        <div class="pipeline-steps" id="pipeline-steps" style="margin-bottom:8px;">
           <div class="ps" id="step-1"><span class="ps-num">01</span><span class="ps-name">Claim Extraction</span><span class="ps-phase">Phase 1 · RAG</span></div>
           <div class="ps" id="step-2"><span class="ps-num">02</span><span class="ps-name">Evidence Attribution</span><span class="ps-phase">Phase 1 · RAG</span></div>
           <div class="ps" id="step-3"><span class="ps-num">03</span><span class="ps-name">Normalisation</span><span class="ps-phase">Rule-based · 0 tokens</span></div>
@@ -125,16 +164,17 @@
           <div class="ps" id="step-4"><span class="ps-num">06</span><span class="ps-name">Agreement Reasoning</span><span class="ps-phase">Phase 2 · ID prompts</span></div>
           <div class="ps" id="step-5"><span class="ps-num">07</span><span class="ps-name">Gap Detection</span><span class="ps-phase">Graph degree + label</span></div>
         </div>
+        <div id="live-logs" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-3); background:var(--bg-2); padding:4px 8px; border-radius:4px; max-width:800px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Starting engine...</div>
       </div>
     </div>
 
     <!-- Empty state -->
     <div id="empty-state" class="empty-state">
-      <div class="empty-icon">
+      <div class="empty-icon" id="empty-icon">
         <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><polygon points="24,4 42,14 42,34 24,44 6,34 6,14" stroke="var(--accent)" stroke-width="1.5" fill="none" opacity="0.4"/><polygon points="24,14 33,19 33,29 24,34 15,29 15,19" stroke="var(--accent)" stroke-width="1" fill="var(--accent)" opacity="0.08"/></svg>
       </div>
-      <p class="empty-title">No analysis yet</p>
-      <p class="empty-sub">Enter a query and run the pipeline to fetch papers, then see claims, assumptions, gaps and the Epistemic Dependency Graph.</p>
+      <p class="empty-title" id="empty-title">No analysis yet</p>
+      <p class="empty-sub" id="empty-sub">Enter a query and run the pipeline to fetch papers, then see claims, assumptions, gaps and the Epistemic Dependency Graph.</p>
     </div>
 
     <!-- Results -->
@@ -143,8 +183,6 @@
       <!-- Stat bar -->
       <div class="stat-bar">
         <div class="stat"><span class="stat-val" id="stat-claims">0</span><span class="stat-key">Claims</span></div>
-        <div class="stat-sep"></div>
-        <div class="stat red"><span class="stat-val" id="stat-contradictions">0</span><span class="stat-key">Contradictions</span></div>
         <div class="stat-sep"></div>
         <div class="stat amber"><span class="stat-val" id="stat-gaps">0</span><span class="stat-key">Gaps</span></div>
         <div class="stat-sep"></div>
@@ -166,13 +204,26 @@
 
       <!-- Tabs -->
       <div class="tab-nav">
-        <button class="tab-btn active" data-tab="claims">Claims</button>
+        <button class="tab-btn active" data-tab="sources">Sources</button>
+        <button class="tab-btn" data-tab="claims">Claims</button>
         <button class="tab-btn" data-tab="agreements">Agreements</button>
         <button class="tab-btn" data-tab="gaps">Research Gaps</button>
         <button class="tab-btn" data-tab="graph">EDG</button>
+        <button class="tab-btn" data-tab="diagnostics">Diagnostics</button>
       </div>
 
-      <div class="tab-panel" id="tab-claims"><div id="claims-list"></div></div>
+      <div class="tab-panel" id="tab-sources">
+        <div class="sf-bar" id="sf-bar">
+          <button class="sf-btn active" data-src="all">All Sources</button>
+          <button class="sf-btn" data-src="upload">Uploaded</button>
+          <button class="sf-btn" data-src="arxiv">arXiv</button>
+          <button class="sf-btn" data-src="pubmed">PubMed</button>
+          <button class="sf-btn" data-src="semantic_scholar">Semantic Scholar</button>
+          <button class="sf-btn" data-src="europepmc">EuropePMC</button>
+        </div>
+        <div id="sources-list" class="sources-grid"></div>
+      </div>
+      <div class="tab-panel hidden" id="tab-claims"><div id="claims-list"></div></div>
       <div class="tab-panel hidden" id="tab-agreements"><div id="agreements-list"></div></div>
       <div class="tab-panel hidden" id="tab-gaps">
         <div class="gap-formula-panel">
@@ -200,7 +251,7 @@
           <div class="edg-formal-defs">
             <span class="edg-formal-def"><span class="efd-key">V<sub>C</sub></span> Claims &nbsp;&mdash;&nbsp; C = (S, P, O, M, D, &Theta;)</span>
             <span class="edg-formal-def"><span class="efd-key">V<sub>A</sub></span> Assumptions &nbsp;&mdash;&nbsp; A = (type, constraint, explicit)</span>
-            <span class="edg-formal-def"><span class="efd-key">E</span> Evidence &middot; Dependency &middot; Agreement &middot; Contradiction</span>
+            <span class="edg-formal-def"><span class="efd-key">E</span> Evidence &middot; Dependency &middot; Agreement &middot; Conditional</span>
           </div>
           <div class="edg-formal-stats" id="edg-formal-stats">
             <span class="edg-stat-pill" id="fstat-claims">— claims</span>
@@ -210,16 +261,22 @@
           </div>
         </div>
 
-        <!-- Canvas -->
-        <div class="edg-wrap">
-          <canvas id="edg-canvas" width="760" height="420"></canvas>
+        <!-- Instructions & Canvas -->
+        <div class="edg-wrap" style="position: relative;">
+          <div class="edg-instructions">
+            <strong>How to read this graph:</strong> Outer circles represent extracted <strong>Claims</strong>, inner circles map to their <strong>Assumptions</strong>. The 6-character codes inside nodes correspond to their unique IDs. <em>Hover over any node</em> to view its full text and metrics. The edges represent how these statements interact across different papers.
+          </div>
+          <canvas id="edg-canvas" width="760" height="420" style="cursor: crosshair;"></canvas>
+          
+          <!-- Tooltip container -->
+          <div id="edg-tooltip" class="edg-tooltip hidden"></div>
+          
           <div class="edg-legend">
             <span class="leg"><span class="leg-dot agree"></span>Agree</span>
-            <span class="leg"><span class="leg-dot contradict"></span>Contradict</span>
             <span class="leg"><span class="leg-dot conditional"></span>Conditional</span>
             <span class="leg"><span class="leg-dot gap"></span>Gap region</span>
             <span class="leg"><span class="leg-dot assump"></span>Assumption</span>
-            <span class="leg"><span class="leg-dot" style="background:var(--gold);opacity:0.8;border:1px dashed var(--gold)"></span>Contra path</span>
+            <span class="leg"><span class="leg-dot" style="background:var(--gold);opacity:0.8;border:1px dashed var(--gold)"></span>Reasoning path</span>
           </div>
         </div>
 
@@ -255,13 +312,34 @@
             <div class="edg-panel-title">
               <span class="edg-panel-icon">→</span>
               Reasoning Paths
-              <span class="edg-panel-sub">contradiction + gap chains</span>
+              <span class="edg-panel-sub">multi-hop claim + gap chains</span>
             </div>
             <div class="edg-panel-body" id="paths-list">
               <span class="edg-empty">Run analysis to see paths</span>
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <div class="tab-panel hidden" id="tab-diagnostics">
+        <div class="diag-grid">
+          <div class="diag-card">
+            <div class="diag-title">Run Context</div>
+            <pre id="diag-query-context" class="diag-json">No query context</pre>
+          </div>
+          <div class="diag-card">
+            <div class="diag-title">ACE Report</div>
+            <pre id="diag-ace" class="diag-json">No ACE report</pre>
+          </div>
+          <div class="diag-card">
+            <div class="diag-title">Token Stats</div>
+            <pre id="diag-tokens" class="diag-json">No token stats</pre>
+          </div>
+          <div class="diag-card">
+            <div class="diag-title">Errors</div>
+            <pre id="diag-errors" class="diag-json">No errors</pre>
+          </div>
         </div>
       </div>
 

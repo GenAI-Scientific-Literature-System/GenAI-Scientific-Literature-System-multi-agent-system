@@ -2,6 +2,7 @@
 
 import numpy as np
 from typing import Any
+import torch
 from sentence_transformers import SentenceTransformer
 
 SPECTER_MODEL = "allenai-specter"
@@ -10,11 +11,25 @@ SPECTER_MODEL = "allenai-specter"
 class EmbeddingEngine:
     def __init__(self, model_name: str = SPECTER_MODEL, debug: bool = True):
         self.debug = debug
+        self.device = self._select_device()
         if self.debug:
-            print(f"[EmbeddingEngine] Loading model: {model_name}")
-        self.model = SentenceTransformer(model_name)
+            print(f"[EmbeddingEngine] Loading model: {model_name} on {self.device}")
+        self.model = SentenceTransformer(model_name, device=self.device)
         if self.debug:
             print(f"[EmbeddingEngine] Model loaded")
+
+    def _select_device(self) -> str:
+        if torch.backends.mps.is_available():
+            if self.debug:
+                print("[EmbeddingEngine] Using Apple Metal (mps)")
+            return "mps"
+        if torch.cuda.is_available():
+            if self.debug:
+                print("[EmbeddingEngine] Using CUDA")
+            return "cuda"
+        if self.debug:
+            print("[EmbeddingEngine] Using CPU")
+        return "cpu"
 
     def _embed(self, texts: list[str]) -> np.ndarray:
         # batch encode all texts at once — much faster than one by one
@@ -22,6 +37,7 @@ class EmbeddingEngine:
             texts,
             batch_size=16,
             show_progress_bar=self.debug,
+            device=self.device,
             convert_to_numpy=True,
             normalize_embeddings=True,  # L2 normalize → cosine sim becomes dot product
         )

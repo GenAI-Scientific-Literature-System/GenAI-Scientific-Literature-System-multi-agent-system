@@ -7,6 +7,12 @@ from typing import Any
 from pipeline.embedding import EmbeddingEngine
 
 SIMILARITY_THRESHOLD = 0.92  # abstracts above this are considered duplicates
+MIN_QUERY_COVERAGE = 0.16
+RELATIVE_QUERY_COVERAGE = 0.35
+MIN_TITLE_QUERY_COVERAGE = 0.07
+RELATIVE_TITLE_QUERY_COVERAGE = 0.45
+SIGMA_THRESHOLD_FACTOR = 0.25
+MIN_FINAL_SCORE_THRESHOLD = 0.14
 
 
 def _normalize_title(title: str) -> str:
@@ -103,6 +109,16 @@ class Aggregator:
     def _boost_score(self, paper: dict[str, Any]) -> float:
         # base score from embedding similarity to query
         score = paper.get("score") or 0.0
+        retrieval_score = float(paper.get("retrieval_score") or 0.0)
+        score += min(0.30, max(-0.30, retrieval_score * 0.035))
+        coverage = float(paper.get("query_coverage") or 0.0)
+        title_coverage = float(paper.get("title_query_coverage") or 0.0)
+        phrase_hits = int(paper.get("phrase_hits") or 0)
+        title_phrase_hits = int(paper.get("title_phrase_hits") or 0)
+        score += coverage * 0.28
+        score += title_coverage * 0.18
+        score += min(0.10, phrase_hits * 0.03)
+        score += min(0.08, title_phrase_hits * 0.04)
 
         # recency boost only — citation count removed to avoid bias
         year = paper.get("year")
@@ -141,11 +157,26 @@ class Aggregator:
         for paper in papers:
             paper["score"] = self._boost_score(paper)
 
+        best_coverage = max(float(p.get("query_coverage") or 0.0) for p in papers)
+        best_title_coverage = max(float(p.get("title_query_coverage") or 0.0) for p in papers)
+        coverage_floor = max(MIN_QUERY_COVERAGE, best_coverage * RELATIVE_QUERY_COVERAGE)
+        title_floor = max(MIN_TITLE_QUERY_COVERAGE, best_title_coverage * RELATIVE_TITLE_QUERY_COVERAGE)
+        filtered_by_coverage = [
+            p for p in papers
+            if float(p.get("query_coverage") or 0.0) >= coverage_floor
+            or float(p.get("title_query_coverage") or 0.0) >= title_floor
+            or int(p.get("phrase_hits") or 0) > 0
+        ]
+        if filtered_by_coverage:
+            papers = filtered_by_coverage
+        elif self.debug:
+            print("[Aggregator] Coverage gate retained no papers; falling back to semantic scores")
+
         # dynamic threshold based on score distribution
         scores = [p.get("score") or 0.0 for p in papers]
         mean = float(np.mean(scores))
         std = float(np.std(scores))
-        threshold = mean - 0.5 * std
+        threshold = max(MIN_FINAL_SCORE_THRESHOLD, mean - SIGMA_THRESHOLD_FACTOR * std)
         papers = [p for p in papers if (p.get("score") or 0.0) >= threshold]
         if self.debug:
             print(f"[Aggregator] Dynamic threshold: {threshold:.4f} (mean={mean:.4f}, std={std:.4f})")
