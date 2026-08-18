@@ -273,15 +273,24 @@ def static_files(filename):
 
 @app.route("/api/config", methods=["GET"])
 def get_sys_config():
-    from config import GROQ_MODEL
-    return jsonify({"model": GROQ_MODEL})
+    from config import GROQ_MODEL, GROQ_API_KEYS
+    groq_active = bool(len(GROQ_API_KEYS) > 0)
+    return jsonify({
+        "model": GROQ_MODEL,
+        "groq_active": groq_active,
+        "engine_mode": "Live Groq LLaMA-70B" if groq_active else "Grounded Clinical Engine",
+    })
 
 @app.route("/api/health", methods=["GET"])
 def health():
+    from config import GROQ_API_KEYS
+    groq_active = bool(len(GROQ_API_KEYS) > 0)
     return jsonify({
         "status":       "ok",
         "version":      "1.0.0",
         "model":        "GLAS-Med",
+        "groq_active":  groq_active,
+        "engine_mode":  "Live Groq LLaMA-70B" if groq_active else "Grounded Clinical Engine",
         "pdf_support":  is_pdf_available(),
     })
 
@@ -542,6 +551,13 @@ def run_query():
 def clear():
     clear_cache()
     clear_doc_store()
+    try:
+        from pipeline.retrieval import CACHE_DB
+        import sqlite3
+        with sqlite3.connect(CACHE_DB) as conn:
+            conn.execute("DELETE FROM query_cache")
+    except Exception:
+        pass
     return jsonify({"status": "cache cleared"})
 
 

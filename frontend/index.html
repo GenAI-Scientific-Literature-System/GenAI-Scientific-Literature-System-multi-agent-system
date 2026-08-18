@@ -143,6 +143,7 @@
     <div class="model-info" id="model-info">
       <span class="model-label">Model:</span>
       <span class="model-value" id="model-value">Loading…</span>
+      <div id="engine-badge" style="margin-top:6px;font-size:10px;padding:3px 8px;border-radius:10px;font-weight:600;display:inline-block;"></div>
     </div>
 
   </aside>
@@ -263,6 +264,13 @@
         <div class="edg-wrap" style="position: relative;">
           <div class="edg-instructions">
             <strong>How to read this graph:</strong> Outer circles represent extracted <strong>Claims</strong>, inner circles map to their <strong>Assumptions</strong>. The 6-character codes inside nodes correspond to their unique IDs. <em>Hover over any node</em> to view its full text and metrics. The edges represent how these statements interact across different papers.
+          </div>
+          <div class="edg-filter-bar" style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.5px;">Filter:</span>
+            <button class="btn-ghost filter-btn active" id="btn-filter-all" onclick="setGraphFilter('all')" style="padding:3px 10px;font-size:11px;border-radius:6px;">All Nodes</button>
+            <button class="btn-ghost filter-btn" id="btn-filter-unquarantined" onclick="setGraphFilter('unquarantined')" style="padding:3px 10px;font-size:11px;border-radius:6px;">Hide Quarantined (ρ &lt; 0.45)</button>
+            <button class="btn-ghost filter-btn" id="btn-filter-high-rel" onclick="setGraphFilter('high_rel')" style="padding:3px 10px;font-size:11px;border-radius:6px;">High Reliability (ρ &ge; 0.70)</button>
+            <button class="btn-ghost filter-btn" id="btn-filter-agreed" onclick="setGraphFilter('agreed')" style="padding:3px 10px;font-size:11px;border-radius:6px;">Agreements Only</button>
           </div>
           <canvas id="edg-canvas" width="760" height="420" style="cursor: crosshair;"></canvas>
           

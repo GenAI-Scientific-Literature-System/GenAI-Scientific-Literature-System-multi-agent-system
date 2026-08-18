@@ -74,12 +74,26 @@ setInterval(checkHealth, 30000);
 /* ── MODEL INFO ────────────────────────────────────────────────────────── */
 async function loadModelInfo() {
   const modelValue = document.getElementById('model-value');
+  const engineBadge = document.getElementById('engine-badge');
   try {
     const r = await fetch(`${API}/api/config`, { signal: AbortSignal.timeout(4000) });
     if (r.ok) {
       const data = await r.json();
       if (modelValue && data.model) {
         modelValue.textContent = data.model;
+      }
+      if (engineBadge) {
+        if (data.groq_active) {
+          engineBadge.textContent = '🟢 Live Groq LLaMA-70B';
+          engineBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+          engineBadge.style.color = '#10b981';
+          engineBadge.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+        } else {
+          engineBadge.textContent = '🟡 Grounded Clinical Engine';
+          engineBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+          engineBadge.style.color = '#f59e0b';
+          engineBadge.style.border = '1px solid rgba(245, 158, 11, 0.3)';
+        }
       }
     }
   } catch (err) {
@@ -867,6 +881,16 @@ function normalizeEDGGraph(graph) {
   };
 }
 
+let currentGraphFilter = 'all';
+window.setGraphFilter = function(filter) {
+  currentGraphFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`btn-filter-${filter === 'high_rel' ? 'high-rel' : filter}`);
+  if (activeBtn) activeBtn.classList.add('active');
+  _edgSettled = false;
+  if (!_animFrame) _animFrame = requestAnimationFrame(drawEDGLoop);
+};
+
 function renderEDG(graph) {
   edgGraphData = normalizeEDGGraph(graph);
   
@@ -1007,6 +1031,8 @@ function _drawEDG() {
     let dimEdge = edgFocusNode && !(highlighted.has(e.source) && highlighted.has(e.target));
     if (dimEdge) return; // Skip drawing for extreme clarity, or draw very faint
 
+    if (currentGraphFilter === 'agreed' && e.relation !== 'agree' && e.relation !== 'AGREE') return;
+
     ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(t.x, t.y);
     const relation = e.relation === 'contradict' ? 'conditional' : e.relation;
     ctx.strokeStyle = EC[relation] || EC.unrelated;
@@ -1021,6 +1047,20 @@ function _drawEDG() {
   // Nodes
   nodes.forEach(n => {
     const p = pos[n.id]; if (!p) return;
+    
+    // Graph interactive filter
+    let isFilteredOut = false;
+    if (currentGraphFilter === 'unquarantined') {
+      const rel = (n.reliability !== undefined) ? n.reliability : ((n.provenance && n.provenance.study_reliability) ?? 1.0);
+      if (rel < 0.45 || (n.provenance && n.provenance.quarantined)) isFilteredOut = true;
+    } else if (currentGraphFilter === 'high_rel') {
+      const rel = (n.reliability !== undefined) ? n.reliability : ((n.provenance && n.provenance.study_reliability) ?? 0);
+      if (rel < 0.70) isFilteredOut = true;
+    } else if (currentGraphFilter === 'agreed') {
+      const hasAgree = edges.some(e => (e.source === n.id || e.target === n.id) && (e.relation === 'agree' || e.relation === 'AGREE'));
+      if (!hasAgree) isFilteredOut = true;
+    }
+    if (isFilteredOut) return;
     const isClaim   = n.type === 'claim';
     const isGap     = n.gap_region === true;
     const r         = p.r;

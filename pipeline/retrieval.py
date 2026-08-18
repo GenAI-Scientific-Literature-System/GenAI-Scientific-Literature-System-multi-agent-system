@@ -1,7 +1,7 @@
-# pipeline/retrieval.py
-
 import os
 import re
+import sqlite3
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from typing import Any
 import numpy as np
@@ -11,6 +11,25 @@ from pipeline.connectors.europepmc import EuropePMCConnector
 from pipeline.connectors.semantic_scholar import SemanticScholarConnector
 from pipeline.connectors.arxiv import ArxivConnector
 from pipeline.embedding import EmbeddingEngine
+
+CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+os.makedirs(CACHE_DIR, exist_ok=True)
+CACHE_DB = os.path.join(CACHE_DIR, "retrieval_cache.db")
+
+def _init_cache_db():
+    try:
+        with sqlite3.connect(CACHE_DB) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS query_cache (
+                    cache_key TEXT PRIMARY KEY,
+                    papers_json TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+    except Exception:
+        pass
+
+_init_cache_db()
 
 # domain → sources mapping
 DOMAIN_SOURCE_MAP: dict[str, list[str]] = {
@@ -381,6 +400,20 @@ class Retriever:
         if not domains:
             domains = ["general"]
 
+        cache_key = f"{query.lower().strip()}_{sorted(domains)}_{self.top_k}"
+        try:
+            with sqlite3.connect(CACHE_DB) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT papers_json FROM query_cache WHERE cache_key = ?", (cache_key,))
+                row = cur.fetchone()
+                if row and row[0]:
+                    cached_papers = json.loads(row[0])
+                    if self.debug:
+                        print(f"[Retriever] SQLite Disk Cache HIT for '{query}' ({len(cached_papers)} papers)")
+                    return cached_papers
+        except Exception:
+            pass
+
         sources = self._resolve_sources(domains)
         if not sources:
             sources = ["semantic_scholar"]
@@ -420,4 +453,13 @@ class Retriever:
         if self.debug:
             print(f"[Retriever] Total papers after dedup: {len(all_papers)}")
 
-        return self._rank_with_domains(all_papers, query, domains)
+        results = self._rank_with_domains(all_papers, query, domains)
+        try:
+            with sqlite3.connect(CACHE_DB) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO query_cache (cache_key, papers_json) VALUES (?, ?)",
+                    (cache_key, json.dumps(results)),
+                )
+        except Exception:
+            pass
+        return results
