@@ -900,6 +900,7 @@ function renderAgreements(agreements, claims) {
     
     const relIcon = rel === 'agree' ? '✓' : (rel === 'contradict' ? '⚡' : '↹');
     const relLabel = rel === 'agree' ? 'AGREEMENT' : (rel === 'contradict' ? 'CONTRADICTION' : 'CONDITIONAL');
+    const relationPhrase = rel === 'agree' ? '↳ Corroborates / Agrees with' : (rel === 'contradict' ? '↳ Directly Contradicts' : '↳ Conditionally Qualified by');
 
     const tierA = (ci.provenance && (ci.provenance.design_tier || ci.provenance.evidence_tier)) || ci.evidence_tier || 3;
     const tierB = (cj.provenance && (cj.provenance.design_tier || cj.provenance.evidence_tier)) || cj.evidence_tier || 3;
@@ -909,27 +910,11 @@ function renderAgreements(agreements, claims) {
     const textA = ci.text || `${ci.subject} ${ci.predicate} ${ci.object}`;
     const textB = cj.text || `${cj.subject} ${cj.predicate} ${cj.object}`;
 
-    const p1 = ci.pico || {};
-    const p2 = cj.pico || {};
-
-    const picoChipsA = (p1.intervention || ci.subject || p1.outcome || ci.object) ? `
-      <div class="ag-study-pico">
-        ${(p1.intervention || ci.subject) ? `<span class="pico-chip int">💊 ${esc((p1.intervention || ci.subject).slice(0,35))}</span>` : ''}
-        ${(p1.outcome || ci.object) ? `<span class="pico-chip out">🎯 ${esc((p1.outcome || ci.object).slice(0,35))}</span>` : ''}
-      </div>` : '';
-
-    const picoChipsB = (p2.intervention || cj.subject || p2.outcome || cj.object) ? `
-      <div class="ag-study-pico">
-        ${(p2.intervention || cj.subject) ? `<span class="pico-chip int">💊 ${esc((p2.intervention || cj.subject).slice(0,35))}</span>` : ''}
-        ${(p2.outcome || cj.object) ? `<span class="pico-chip out">🎯 ${esc((p2.outcome || cj.object).slice(0,35))}</span>` : ''}
-      </div>` : '';
-
     const sharedAssump = (a.shared_assumptions || []).filter(Boolean);
     const sharedBlock = sharedAssump.length ? `
-      <div class="ag-alignment-row">
-        <span class="ag-alignment-lbl">Shared Assumptions:</span>
-        ${sharedAssump.map(x => `<span class="ag-shared-tag">✓ ${esc(x)}</span>`).join(' ')}
-      </div>` : '';
+      <span>Shared context:</span>
+      ${sharedAssump.map(x => `<span class="ag-shared-tag">${esc(x)}</span>`).join(' ')}
+    ` : '';
 
     const basisMap = {
       'identical-sets': 'Identical Assumption Sets',
@@ -942,44 +927,38 @@ function renderAgreements(agreements, claims) {
     const basisDisplay = basisMap[a.agreement_basis] || a.agreement_basis || 'Epistemic Consensus';
 
     return `<div class="agreement-card ${rel}">
-      <div class="ag-header">
-        <div class="ag-header-left">
-          <span class="rel-badge ${rel}">${relIcon} ${relLabel}</span>
-          <span class="ag-basis-pill">${esc(basisDisplay)}</span>
-        </div>
-        <div class="ag-header-right">
-          <span class="ag-conf-pill">${((a.confidence || 0.95) * 100).toFixed(0)}% Consensus Confidence</span>
-        </div>
-      </div>
-
-      <div class="ag-comparison-grid">
-        <div class="ag-study-col ag-study-a">
-          <div class="ag-study-head">
-            <span class="ag-study-source">${esc(ci.paper_source || ci.paper_id || 'Study A')}</span>
-            <span class="ag-study-tier">${esc(tierALabel)}</span>
-          </div>
-          <div class="ag-study-claim-text">${esc(textA)}</div>
-          ${picoChipsA}
-        </div>
-
-        <div class="ag-relation-bridge">
-          <div class="ag-relation-line"></div>
-          <div class="ag-relation-icon-badge ${rel}">${relIcon}</div>
-          <div class="ag-relation-label ${rel}">${relLabel}</div>
-          <div class="ag-relation-line"></div>
-        </div>
-
-        <div class="ag-study-col ag-study-b">
-          <div class="ag-study-head">
-            <span class="ag-study-source">${esc(cj.paper_source || cj.paper_id || 'Study B')}</span>
-            <span class="ag-study-tier">${esc(tierBLabel)}</span>
-          </div>
-          <div class="ag-study-claim-text">${esc(textB)}</div>
-          ${picoChipsB}
+      <div class="ag-top-row">
+        <span class="ag-status-badge ${rel}">${relIcon} ${relLabel}</span>
+        <div class="ag-meta-info">
+          <span class="ag-conf">${((a.confidence || 0.95) * 100).toFixed(0)}% Confidence</span>
+          <span class="ag-dot">·</span>
+          <span class="ag-basis-text">Basis: ${esc(basisDisplay)}</span>
         </div>
       </div>
 
-      ${sharedBlock ? `<div class="ag-footer">${sharedBlock}</div>` : ''}
+      <div class="ag-claim-item">
+        <div class="ag-claim-header">
+          <span class="ag-claim-tag">Claim A</span>
+          <span class="ag-paper-ref">${esc(ci.paper_source || ci.paper_id || 'Study A')}</span>
+          <span class="ag-tier-ref">${esc(tierALabel)}</span>
+        </div>
+        <div class="ag-claim-body">${esc(textA)}</div>
+      </div>
+
+      <div class="ag-relation-divider ${rel}">
+        <span>${relationPhrase}</span>
+      </div>
+
+      <div class="ag-claim-item">
+        <div class="ag-claim-header">
+          <span class="ag-claim-tag">Claim B</span>
+          <span class="ag-paper-ref">${esc(cj.paper_source || cj.paper_id || 'Study B')}</span>
+          <span class="ag-tier-ref">${esc(tierBLabel)}</span>
+        </div>
+        <div class="ag-claim-body">${esc(textB)}</div>
+      </div>
+
+      ${sharedBlock ? `<div class="ag-shared-assumptions">${sharedBlock}</div>` : ''}
     </div>`;
   }).join('');
 }
