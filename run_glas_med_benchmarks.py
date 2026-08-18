@@ -208,6 +208,7 @@ def run_dynamic_benchmarks():
     from src.graph.edg import build_edg
     from src.agents.agent5_uncertainty import propagate_uncertainty
     from src.reasoning import formal_score
+    from src.agents.agent6_assumption import extract_assumptions
     from src.agents.agent6_1_verify import verify_assumption
     from src.models.schemas import VerificationStatus
 
@@ -222,11 +223,15 @@ def run_dynamic_benchmarks():
         paper_text_map[p["id"]] = p["abstract"]
         ext, dropped = extract_claims(p["abstract"], paper_id=p["id"])
         dropped_v1_count += dropped
+
+        # Run Agent 6: Extract clinical assumptions for claims
+        assumptions = extract_assumptions(p["abstract"], ext)
+        all_assumptions.extend(assumptions)
+
         for c in ext:
             res = study_reliability(p["abstract"], {"study_design": p["design"], "sample_size": p["sample_size"], "double_blind": p["double_blind"]})
             c.study_reliability = res["score"]
             c.uncertainty = round(1.0 - c.extraction_confidence, 3)
-            all_assumptions.extend(c.assumptions)
         full_claims.extend(ext)
 
     full_agreements = weighted_agreements(full_claims)
@@ -234,14 +239,14 @@ def run_dynamic_benchmarks():
     full_gaps, _ = detect_gaps(full_claims, full_edg)
     full_claims = propagate_uncertainty(full_claims, full_agreements)
 
-    # Empirically verify all assumptions
+    # Empirically verify all assumptions via Agent 6.1
     rejected_count = 0
     for a in all_assumptions:
-        src_text = paper_text_map.get(a.paper_id, "")
+        src_text = paper_text_map.get(getattr(a, "paper_id", ""), "") or " ".join(paper_text_map.values())
         verified_a = verify_assumption(a, src_text)
         if verified_a.verification == VerificationStatus.REJECTED:
             rejected_count += 1
-    empirical_rej_rate = rejected_count / max(len(all_assumptions), 1)
+    empirical_rej_rate = float(rejected_count / max(len(all_assumptions), 1))
 
     full_contra = sum(1 for a in full_agreements if a.relation == "contradict")
     full_avg_u = float(np.mean([c.uncertainty for c in full_claims])) if full_claims else 0.0
@@ -250,7 +255,6 @@ def run_dynamic_benchmarks():
     from src.struct import MERLINStruct
 
     # 2. Ablation: Without 8-Factor Reliability (ρ)
-    # Inherit empirical model extraction uncertainty without reliability adjustments
     no_rel_claims = [
         Claim(
             id=c.id,
@@ -285,10 +289,13 @@ def run_dynamic_benchmarks():
     raw_rag_claims = []
     for item in CLINICAL_BENCHMARK_DATA:
         p = item["paper"]
-        # Raw unguided extraction: splits sentences directly on keyword matches without ACE/V1
+        title_tokens = set(re.split(r"\W+", p["title"].lower()))
         raw_sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", p["abstract"]) if s.strip()]
         raw_rag_f1_scores.append(precision_recall_f1(raw_sents, item["gold_claims"])["f1"])
         for idx, s in enumerate(raw_sents):
+            sent_tokens = set(re.split(r"\W+", s.lower()))
+            overlap = len(sent_tokens & title_tokens) / max(len(title_tokens), 1)
+            raw_conf = round(max(0.15, min(0.90, overlap + 0.10)), 3)
             raw_rag_claims.append(Claim(
                 id=f"rag_{p['id']}_{idx}",
                 subject=s[:40],
@@ -296,22 +303,22 @@ def run_dynamic_benchmarks():
                 object=s[40:180],
                 domain="clinical",
                 paper_id=p["id"],
-                extraction_confidence=0.5,
-                uncertainty=0.5
+                extraction_confidence=raw_conf,
+                uncertainty=round(1.0 - raw_conf, 3)
             ))
 
-    rag_f1 = float(np.mean(raw_rag_f1_scores)) if raw_rag_f1_scores else 0.50
+    rag_f1 = float(np.mean(raw_rag_f1_scores)) if raw_rag_f1_scores else 0.0
     struct_rag = MERLINStruct.build(raw_rag_claims, [])
     rag_agreements = compute_agreements(raw_rag_claims, struct_rag)
     rag_contra = sum(1 for a in rag_agreements if a.relation == "contradict")
-    rag_avg_u = float(np.mean([c.uncertainty for c in raw_rag_claims])) if raw_rag_claims else 0.5
+    rag_avg_u = float(np.mean([c.uncertainty for c in raw_rag_claims])) if raw_rag_claims else 0.0
     rag_rej_rate = float(dropped_v1_count / max(len(raw_rag_claims) + dropped_v1_count, 1))
     rag_loss = formal_score(rag_contra, len(rag_agreements), rag_avg_u, assumption_rejection_rate=rag_rej_rate)
 
-    print(f"  • Full GLAS-Med MAS (Proposed)       | Pairs: {len(full_agreements):<3} | Gaps: {len(full_gaps):<2} | Epistemic Loss: {full_loss:.3f}")
-    print(f"  • w/o 8-Factor Reliability (ρ)       | Pairs: {len(no_rel_agreements):<3} | Gaps: {len(full_gaps):<2} | Epistemic Loss: {no_rel_loss:.3f}")
-    print(f"  • w/o PICO Consensus Clustering      | Pairs: {len(no_pico_agreements):<3} | Gaps: {len(full_gaps):<2} | Epistemic Loss: {no_pico_loss:.3f}")
-    print(f"  • Vanilla Single-Pass RAG Baseline   | F1: {rag_f1:.3f} | Epistemic Loss: {rag_loss:.3f}")
+    print(f"  • Full GLAS-Med MAS (Proposed)       | Pairs: {len(full_agreements):<3} | Gaps: {len(full_gaps):<2} | Rej Rate: {empirical_rej_rate:.2f} | Epistemic Loss: {full_loss:.3f}")
+    print(f"  • w/o 8-Factor Reliability (ρ)       | Pairs: {len(no_rel_agreements):<3} | Gaps: {len(full_gaps):<2} | Rej Rate: {empirical_rej_rate:.2f} | Epistemic Loss: {no_rel_loss:.3f}")
+    print(f"  • w/o PICO Consensus Clustering      | Pairs: {len(no_pico_agreements):<3} | Gaps: {len(full_gaps):<2} | Rej Rate: {empirical_rej_rate:.2f} | Epistemic Loss: {no_pico_loss:.3f}")
+    print(f"  • Vanilla Single-Pass RAG Baseline   | F1: {rag_f1:.3f} | Rej Rate: {rag_rej_rate:.2f} | Epistemic Loss: {rag_loss:.3f}")
 
     # ── PART 4: Real Wall-Clock Latency & Token Profiling ─────────────────────
     print("\n[Part 4] Real-Time Wall-Clock Latency & Token Profiling...")

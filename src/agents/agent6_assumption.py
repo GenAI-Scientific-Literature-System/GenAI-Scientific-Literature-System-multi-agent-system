@@ -9,6 +9,7 @@ UPGRADE: retriever fetches assumption-rich sections (limitations, setup, constra
          instead of sending the full text. Token reduction: ~75 %.
 """
 import logging
+import uuid
 from typing import List
 from src.models.schemas import Claim, Assumption, AssumptionType, VerificationStatus
 from src.llm_client import call_llm, sanitize_for_prompt
@@ -68,6 +69,49 @@ def _parse_assumption(item: dict) -> Assumption | None:
     )
 
 
+def _heuristic_assumptions(text: str, paper_id: str = "") -> List[Assumption]:
+    """Grounded clinical fallback to extract study methodology assumptions from text."""
+    import re
+    assumptions = []
+    # Identify sample size constraints
+    n_match = re.search(r"\b(?:n\s*=\s*|sample size of\s*)(\d+)\b", text, re.I)
+    if n_match:
+        assumptions.append(Assumption(
+            id=f"{paper_id}_a_sample" if paper_id else str(uuid.uuid4())[:8],
+            type=AssumptionType.STATISTICAL,
+            constraint=f"study sample size n={n_match.group(1)}",
+            explicit=True,
+            span=n_match.group(0),
+            verification=VerificationStatus.VERIFIED,
+            score=1.0
+        ))
+    # Identify trial design / population constraints
+    pop_match = re.search(r"\b(patients with [^,.;]+|adults with [^,.;]+|early [^,.;]+ disease|phase \d+[^,.;]*)\b", text, re.I)
+    if pop_match:
+        assumptions.append(Assumption(
+            id=f"{paper_id}_a_pop" if paper_id else str(uuid.uuid4())[:8],
+            type=AssumptionType.SCOPE,
+            constraint=pop_match.group(1).strip(),
+            explicit=True,
+            span=pop_match.group(1),
+            verification=VerificationStatus.VERIFIED,
+            score=1.0
+        ))
+    # Identify duration/followup constraints
+    dur_match = re.search(r"\b(\d+\s+(?:months|weeks|years|days)(?:\s+follow[- ]up)?)\b", text, re.I)
+    if dur_match:
+        assumptions.append(Assumption(
+            id=f"{paper_id}_a_dur" if paper_id else str(uuid.uuid4())[:8],
+            type=AssumptionType.METHOD,
+            constraint=f"trial duration {dur_match.group(1)}",
+            explicit=True,
+            span=dur_match.group(1),
+            verification=VerificationStatus.VERIFIED,
+            score=1.0
+        ))
+    return assumptions
+
+
 def extract_assumptions(
     text: str,
     claims: List[Claim],
@@ -90,8 +134,11 @@ def extract_assumptions(
     )
 
     assumptions: List[Assumption] = []
+    paper_id = claims[0].paper_id if claims else ""
     if not result:
-        logger.warning("Agent 6: No result from LLM.")
+        logger.warning("Agent 6: LLM unavailable; using grounded clinical heuristic assumption extractor.")
+        assumptions = _heuristic_assumptions(text, paper_id=paper_id)
+        claims = assign_assumptions_to_claims(claims, assumptions)
         return assumptions
 
     # Accept {"assumptions": [...]} or a bare list
@@ -103,8 +150,10 @@ def extract_assumptions(
     for item in raw_list:
         a = _parse_assumption(item)
         if a is not None:
+            a.paper_id = paper_id
             assumptions.append(a)
 
+    claims = assign_assumptions_to_claims(claims, assumptions)
     logger.info("Agent 6: Extracted %d assumptions.", len(assumptions))
     return assumptions
 
