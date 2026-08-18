@@ -1,7 +1,8 @@
 """BioBERT token classification and biomedical NER inference engine.
 
 Provides BC5CDR / DDI biomedical entity recognition (Chemicals, Diseases, Drugs, Outcomes)
-using fine-tuned transformer token classification models, with a robust fallback.
+using fine-tuned transformer token classification checkpoints (d4data/biomedical-ner-all,
+alvaroalon2/biobert_chemical_ner), with a deterministic clinical heuristic fallback.
 """
 from __future__ import annotations
 
@@ -15,16 +16,25 @@ logger = logging.getLogger(__name__)
 
 
 class BioBERTClaimExtractor:
-    def __init__(self, model_name: str | None = None):
+    def __init__(self, model_name: str | None = None, auto_load: bool = True):
         self.model_name = model_name or settings.biobert_model
         self._tokenizer = None
         self._model = None
         self._torch = None
         self._is_loaded = False
+        self._load_attempted = False
+        if auto_load:
+            self.load()
 
     def load(self) -> bool:
         """Load pretrained BioBERT / SciBERT token classification weights."""
+        if self._is_loaded:
+            return True
+        self._load_attempted = True
         try:
+            import os
+            os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+            os.environ["OMP_NUM_THREADS"] = "1"
             import torch
             from transformers import AutoModelForTokenClassification, AutoTokenizer
             self._torch = torch
@@ -32,15 +42,18 @@ class BioBERTClaimExtractor:
             self._model = AutoModelForTokenClassification.from_pretrained(self.model_name)
             self._model.eval()
             self._is_loaded = True
-            logger.info("Successfully loaded BioBERT NER model: %s", self.model_name)
+            logger.info("Successfully loaded BioBERT NER checkpoint: %s", self.model_name)
             return True
         except Exception as e:
-            logger.debug("Transformer BioBERT loading skipped or not present: %s", e)
+            logger.debug("BioBERT transformer loading skipped: %s", e)
             self._is_loaded = False
             return False
 
     def _infer_entities(self, sentence: str) -> Tuple[List[Dict[str, Any]], float]:
         """Perform tensor-level token classification inference."""
+        if not self._is_loaded and not self._load_attempted:
+            self.load()
+
         if not self._is_loaded or self._model is None or self._tokenizer is None:
             return [], 0.5
 
@@ -58,7 +71,7 @@ class BioBERTClaimExtractor:
             current_entity = []
             current_label = None
 
-            id2label = self._model.config.id2label
+            id2label = getattr(self._model.config, "id2label", {})
             for token, pred_id in zip(tokens, predictions[0].tolist()):
                 if token in [self._tokenizer.cls_token, self._tokenizer.sep_token, self._tokenizer.pad_token]:
                     continue
@@ -85,11 +98,14 @@ class BioBERTClaimExtractor:
 
     def extract(self, text: str, paper_id: str = "") -> list[dict[str, Any]]:
         """Extract structured clinical claims from biomedical text."""
+        if not self._is_loaded and not self._load_attempted:
+            self.load()
+
         claims = []
         sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text or "") if s.strip()]
 
         for index, sentence in enumerate(sentences):
-            # 1. Run BioBERT transformer inference if loaded
+            # 1. Run BioBERT transformer inference
             entities, model_conf = self._infer_entities(sentence)
 
             # 2. Extract clinical relations & predicates
@@ -106,7 +122,7 @@ class BioBERTClaimExtractor:
             after = sentence[match.end():].strip(" .;:")
 
             # Determine clinical entities
-            chem_entities = [e["text"] for e in entities if "chem" in e.get("label", "").lower() or "drug" in e.get("label", "").lower()]
+            chem_entities = [e["text"] for e in entities if "chem" in e.get("label", "").lower() or "drug" in e.get("label", "").lower() or "med" in e.get("label", "").lower()]
             dis_entities = [e["text"] for e in entities if "dis" in e.get("label", "").lower() or "out" in e.get("label", "").lower()]
 
             subject = " ".join(chem_entities) if chem_entities else before[-120:]

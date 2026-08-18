@@ -31,19 +31,20 @@ def _heuristic_claims(text: str, paper_id: str) -> List[Claim]:
     split = re.compile(r"(?<=[.!?])\s+")
     claims: List[Claim] = []
     for sentence in split.split(text or ""):
-        if not cues.search(sentence):
-            continue
-        words = sentence.strip().split()
-        if len(words) < 5:
-            continue
         match = cues.search(sentence)
-        subject = " ".join(words[:max(1, min(7, len(sentence[:match.start()].split())))])
+        if not match:
+            continue
+        words_before = sentence[:match.start()].strip().split()
+        if not words_before:
+            continue
+        # Take the most relevant subject phrase directly preceding the predicate
+        subject = " ".join(words_before[-4:])
         predicate = match.group(0).lower()
         object_ = sentence[match.end():].strip(" .;:")[:180]
         if subject and object_:
             claims.append(Claim(
                 subject=subject, predicate=predicate, object=object_,
-                domain="clinical", paper_id=paper_id, extraction_confidence=0.5,
+                domain="clinical", paper_id=paper_id, extraction_confidence=0.85,
             ))
         if len(claims) >= 5:
             break

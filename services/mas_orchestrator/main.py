@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from services.common.app import service_app
 from services.common.settings import settings
 from src.pipeline import run_pipeline
-from src.models.schemas import Claim, Agreement, ResearchGap
+from pipeline.retrieval import Retriever
 
 logger = logging.getLogger(__name__)
 app = service_app("MAS Orchestrator")
@@ -28,17 +28,9 @@ _IN_MEMORY_CHECKPOINTS: Dict[str, Dict[str, Any]] = {}
 
 
 class PipelineRequest(BaseModel):
-    query: str
+    query: str = ""
     paper_ids: List[str] = []
     papers: List[Dict[str, Any]] = Field(default_factory=list)
-
-
-class CheckpointState(BaseModel):
-    run_id: str
-    stage: str
-    status: str
-    timestamp: float
-    data: Dict[str, Any] = Field(default_factory=dict)
 
 
 def _get_redis():
@@ -48,7 +40,7 @@ def _get_redis():
         client.ping()
         return client
     except Exception as e:
-        logger.debug("Redis connection skipped or unavailable: %s", e)
+        logger.debug("Redis connection skipped: %s", e)
         return None
 
 
@@ -61,7 +53,7 @@ def _get_kafka_producer():
             request_timeout_ms=1500
         )
     except Exception as e:
-        logger.debug("Kafka connection skipped or unavailable: %s", e)
+        logger.debug("Kafka connection skipped: %s", e)
         return None
 
 
@@ -119,31 +111,37 @@ def execute_five_agent_pipeline(run_id: str, request: PipelineRequest):
     
     papers = request.papers
     if not papers and request.query:
-        from pipeline.retrieval import retrieve
-        papers = retrieve(request.query, limit=5)
+        retriever = Retriever(top_k_per_source=5)
+        papers = retriever.retrieve(request.query, domains=["medical"])
 
     # Execute full pipeline with all multi-agent stages
-    result = run_pipeline(papers)
+    res_obj = run_pipeline(papers)
+    result_dict = res_obj.to_dict() if hasattr(res_obj, "to_dict") else res_obj
+
+    claims = result_dict.get("claims", [])
+    agreements = result_dict.get("agreements", [])
+    gaps = result_dict.get("gaps", [])
 
     # Stage 2: Evidence Mapping & Oxford Tiering
-    checkpoint_stage(run_id, stage="agent_2_evidence_mapping", status="COMPLETED", data={"claims_count": len(result.get("claims", []))})
+    checkpoint_stage(run_id, stage="agent_2_evidence_mapping", status="COMPLETED", data={"claims_count": len(claims)})
 
     # Stage 3: Reliability Scoring (rho)
-    checkpoint_stage(run_id, stage="agent_3_reliability_scoring", status="COMPLETED", data={"quarantined": sum(1 for c in result.get("claims", []) if (c.get("provenance", {}).get("quarantined") or c.get("reliability", 1.0) < 0.45))})
+    quarantined_count = sum(1 for c in claims if (c.get("provenance", {}).get("quarantined") or c.get("reliability", 1.0) < 0.45))
+    checkpoint_stage(run_id, stage="agent_3_reliability_scoring", status="COMPLETED", data={"quarantined": quarantined_count})
 
     # Stage 4: Agreement & Consensus (Ak)
-    checkpoint_stage(run_id, stage="agent_4_agreement_detection", status="COMPLETED", data={"agreements_count": len(result.get("agreements", []))})
+    checkpoint_stage(run_id, stage="agent_4_agreement_detection", status="COMPLETED", data={"agreements_count": len(agreements)})
 
     # Stage 5: Uncertainty Propagation & Gap Detection
-    checkpoint_stage(run_id, stage="agent_5_uncertainty_propagation", status="COMPLETED", data={"gaps_count": len(result.get("gaps", []))})
+    checkpoint_stage(run_id, stage="agent_5_uncertainty_propagation", status="COMPLETED", data={"gaps_count": len(gaps)})
 
     # Final Checkpoint
-    checkpoint_stage(run_id, stage="pipeline_complete", status="SUCCESS", data={"meta": result.get("meta", {})})
+    checkpoint_stage(run_id, stage="pipeline_complete", status="SUCCESS", data={"meta": result_dict.get("meta", {})})
 
     return {
         "run_id": run_id,
         "status": "SUCCESS",
-        "result": result
+        "result": result_dict
     }
 
 

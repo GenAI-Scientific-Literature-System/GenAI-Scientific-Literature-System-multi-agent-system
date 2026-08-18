@@ -109,7 +109,7 @@ def run_pipeline(papers: List[Dict[str, str]]) -> MERLINResult:
     # ══════════════════════════════════════════════════════════════════════════
     for paper in papers:
         pid  = paper.get("id", "unknown")
-        text = paper.get("text", "")
+        text = paper.get("text", "") or paper.get("abstract", "") or paper.get("title", "")
         if not text.strip():
             continue
 

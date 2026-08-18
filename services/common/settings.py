@@ -10,7 +10,7 @@ class Settings:
     neo4j_password: str = os.getenv("NEO4J_PASSWORD", "glasmed")
     redis_url: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
     kafka_bootstrap_servers: str = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
-    biobert_model: str = os.getenv("BIOBERT_MODEL", "dmis-lab/biobert-base-cased-v1.2")
+    biobert_model: str = os.getenv("BIOBERT_MODEL", "d4data/biomedical-ner-all")
 
 
 settings = Settings()

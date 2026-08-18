@@ -4,6 +4,16 @@ metadata:
   name: glas-med
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  name: glas-med-secrets
+  namespace: glas-med
+type: Opaque
+stringData:
+  NEO4J_USER: "neo4j"
+  NEO4J_PASSWORD: "glasmedpassword"
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: glas-med-config
@@ -11,10 +21,9 @@ metadata:
 data:
   MONGO_URI: "mongodb://mongodb.glas-med.svc.cluster.local:27017"
   NEO4J_URI: "bolt://neo4j.glas-med.svc.cluster.local:7687"
-  NEO4J_USER: "neo4j"
-  NEO4J_PASSWORD: "glasmedpassword"
   REDIS_URL: "redis://redis.glas-med.svc.cluster.local:6379/0"
   KAFKA_BOOTSTRAP_SERVERS: "kafka.glas-med.svc.cluster.local:9092"
+  BIOBERT_MODEL: "d4data/biomedical-ner-all"
 ---
 # ── INFRASTRUCTURE: MONGODB ───────────────────────────────────────────────────
 apiVersion: apps/v1
@@ -119,7 +128,10 @@ spec:
           image: neo4j:5.20-community
           env:
             - name: NEO4J_AUTH
-              value: "neo4j/glasmedpassword"
+              valueFrom:
+                secretKeyRef:
+                  name: glas-med-secrets
+                  key: NEO4J_PASSWORD
           ports:
             - containerPort: 7474
             - containerPort: 7687
@@ -251,6 +263,17 @@ spec:
           envFrom:
             - configMapRef:
                 name: glas-med-config
+          env:
+            - name: NEO4J_USER
+              valueFrom:
+                secretKeyRef:
+                  name: glas-med-secrets
+                  key: NEO4J_USER
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: glas-med-secrets
+                  key: NEO4J_PASSWORD
           ports:
             - containerPort: 8001
           readinessProbe:
