@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>MERLIN — Epistemic Reasoning</title>
+<title>GLAS-Med — Clinical Evidence Synthesis</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="css/style.css"/>
@@ -15,8 +15,8 @@
   <div class="topbar-inner">
     <div class="brand">
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><polygon points="11,2 20,7 20,15 11,20 2,15 2,7" stroke="var(--accent)" stroke-width="1.5" fill="none"/><polygon points="11,6 16,9 16,13 11,16 6,13 6,9" fill="var(--accent)" opacity="0.2"/></svg>
-      <span class="brand-name">MERLIN</span>
-      <span class="brand-tag">Epistemic Reasoning</span>
+      <span class="brand-name">GLAS-Med</span>
+      <span class="brand-tag">Clinical Evidence Synthesis</span>
     </div>
     <div class="topbar-right">
       <span id="api-status" class="status-dot loading">
@@ -155,14 +155,12 @@
       <div class="loader-inner">
         <div class="loader-ring"></div>
         <div class="pipeline-steps" id="pipeline-steps" style="margin-bottom:8px;">
-          <div class="ps" id="step-1"><span class="ps-num">01</span><span class="ps-name">Claim Extraction</span><span class="ps-phase">Phase 1 · RAG</span></div>
-          <div class="ps" id="step-2"><span class="ps-num">02</span><span class="ps-name">Evidence Attribution</span><span class="ps-phase">Phase 1 · RAG</span></div>
-          <div class="ps" id="step-3"><span class="ps-num">03</span><span class="ps-name">Normalisation</span><span class="ps-phase">Rule-based · 0 tokens</span></div>
-          <div class="ps" id="step-6"><span class="ps-num">04</span><span class="ps-name">Assumption Extraction</span><span class="ps-phase">Phase 1 · RAG</span></div>
-          <div class="ps" id="step-6v"><span class="ps-num">05</span><span class="ps-name">Assumption Verification</span><span class="ps-phase">NLI · 0 tokens</span></div>
-          <div class="ps-divider">Text discarded — struct built</div>
-          <div class="ps" id="step-4"><span class="ps-num">06</span><span class="ps-name">Agreement Reasoning</span><span class="ps-phase">Phase 2 · ID prompts</span></div>
-          <div class="ps" id="step-5"><span class="ps-num">07</span><span class="ps-name">Gap Detection</span><span class="ps-phase">Graph degree + label</span></div>
+          <div class="ps" id="step-1"><span class="ps-num">01</span><span class="ps-name">Clinical Claim Extraction</span><span class="ps-phase">Agent 1 · PICO + provenance</span></div>
+          <div class="ps" id="step-2"><span class="ps-num">02</span><span class="ps-name">Evidence Collection</span><span class="ps-phase">Agent 2 · Oxford tiers</span></div>
+          <div class="ps" id="step-3"><span class="ps-num">03</span><span class="ps-name">Study Reliability</span><span class="ps-phase">Agent 3 · eight factors</span></div>
+          <div class="ps-divider">Medical knowledge graph assembled</div>
+          <div class="ps" id="step-4"><span class="ps-num">04</span><span class="ps-name">Agreement Detection</span><span class="ps-phase">Agent 4 · PICO weighted</span></div>
+          <div class="ps" id="step-5"><span class="ps-num">05</span><span class="ps-name">Uncertainty Priority</span><span class="ps-phase">Agent 5 · impact index</span></div>
         </div>
         <div id="live-logs" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-3); background:var(--bg-2); padding:4px 8px; border-radius:4px; max-width:800px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Starting engine...</div>
       </div>
@@ -174,7 +172,7 @@
         <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><polygon points="24,4 42,14 42,34 24,44 6,34 6,14" stroke="var(--accent)" stroke-width="1.5" fill="none" opacity="0.4"/><polygon points="24,14 33,19 33,29 24,34 15,29 15,19" stroke="var(--accent)" stroke-width="1" fill="var(--accent)" opacity="0.08"/></svg>
       </div>
       <p class="empty-title" id="empty-title">No analysis yet</p>
-      <p class="empty-sub" id="empty-sub">Enter a query and run the pipeline to fetch papers, then see claims, assumptions, gaps and the Epistemic Dependency Graph.</p>
+      <p class="empty-sub" id="empty-sub">Enter a clinical query to retrieve evidence, then review claims, reliability, agreement, uncertainty gaps, and the medical knowledge graph.</p>
     </div>
 
     <!-- Results -->
@@ -208,7 +206,7 @@
         <button class="tab-btn" data-tab="claims">Claims</button>
         <button class="tab-btn" data-tab="agreements">Agreements</button>
         <button class="tab-btn" data-tab="gaps">Research Gaps</button>
-        <button class="tab-btn" data-tab="graph">EDG</button>
+        <button class="tab-btn" data-tab="graph">Medical KG</button>
         <button class="tab-btn" data-tab="diagnostics">Diagnostics</button>
       </div>
 
@@ -227,7 +225,7 @@
       <div class="tab-panel hidden" id="tab-agreements"><div id="agreements-list"></div></div>
       <div class="tab-panel hidden" id="tab-gaps">
         <div class="gap-formula-panel">
-          <div class="gfp-title">Gap Detection Formula</div>
+          <div class="gfp-title">Clinical Research-Gap Formula</div>
           <div class="gfp-eq">
             Gap(C) = &alpha;&thinsp;(1 &minus; centrality) + &beta;&thinsp;&middot;&thinsp;uncertainty + &gamma;&thinsp;&middot;&thinsp;(1 &minus; evidence)
           </div>

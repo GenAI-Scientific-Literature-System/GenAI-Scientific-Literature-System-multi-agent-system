@@ -1,5 +1,5 @@
 """
-MERLIN Flask API
+GLAS-Med Flask API
 Endpoints: health, upload (PDF), analyse, sample, cache/clear
 """
 import logging
@@ -280,7 +280,7 @@ def health():
     return jsonify({
         "status":       "ok",
         "version":      "1.0.0",
-        "model":        "MERLIN",
+        "model":        "GLAS-Med",
         "pdf_support":  is_pdf_available(),
     })
 
@@ -490,7 +490,16 @@ def run_query():
         # We don't need 'balanced' vs 'global' anymore, aggregator acts as the semantic global ranker.
         selected = aggregator.aggregate(papers, query)
 
-        papers_for_pipeline = [{"id": p["id"], "text": p["text"]} for p in selected]
+        # Preserve evidence provenance required for GLAS-Med reliability and
+        # uncertainty scoring (for example citation count and journal data).
+        papers_for_pipeline = [
+            {key: paper.get(key) for key in (
+                "id", "text", "pmid", "trial_id", "citation_count", "year",
+                "journal", "sample_size", "dataset_size", "study_design",
+                "journal_impact_quartile",
+            )}
+            for paper in selected
+        ]
         result = run_pipeline(papers_for_pipeline).to_dict()
         result["query"] = query
 
@@ -590,5 +599,5 @@ def sample():
 
 if __name__ == "__main__":
     from config import API_HOST, API_PORT, DEBUG
-    logger.info("Starting MERLIN API on %s:%d", API_HOST, API_PORT)
+    logger.info("Starting GLAS-Med API on %s:%d", API_HOST, API_PORT)
     app.run(host=API_HOST, port=API_PORT, debug=DEBUG)

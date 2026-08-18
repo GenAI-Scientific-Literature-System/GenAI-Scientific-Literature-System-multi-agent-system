@@ -1,0 +1,68 @@
+from src.glas_med import attach_provenance, study_reliability, uncertainty_priorities, weighted_agreements
+from src.models.schemas import Claim
+
+
+def _claim(subject, predicate, object_, paper_id):
+    return Claim(
+        id=paper_id,
+        subject=subject,
+        predicate=predicate,
+        object=object_,
+        domain="adults with type 2 diabetes",
+        paper_id=paper_id,
+        extraction_confidence=1.0,
+    )
+
+
+def test_reliability_uses_paper_eight_factor_adjustments():
+    report = study_reliability(
+        "A double-blind randomized controlled trial enrolled n=200 participants. "
+        "The protocol was pre-registered at ClinicalTrials.gov NCT12345678 and reported 95% confidence intervals."
+    )
+
+    assert report["tier"] == 2
+    assert report["score"] == 1.0
+    assert report["factors"]["blinding_randomisation"] == 0.12
+    assert report["factors"]["preregistration"] == 0.08
+
+
+def test_low_reliability_study_is_quarantined():
+    report = study_reliability("A case report described one patient.")
+
+    assert report["tier"] == 5
+    assert report["quarantined"] is True
+
+
+def test_normalisation_preserves_harmful_risk_direction():
+    from src.agents.agent3_normalize import normalise_claims
+
+    claim = Claim(predicate="increases", object="risk of bleeding")
+    assert normalise_claims([claim])[0].predicate == "increases_risk"
+
+
+def test_pico_weighted_agreement_and_uncertainty_priority():
+    positive_1 = _claim("Metformin", "reduces", "cardiovascular events", "p1")
+    positive_2 = _claim("Metformin", "improves", "cardiovascular events", "p2")
+    negative = _claim("Metformin", "increases risk", "cardiovascular events", "p3")
+    papers = [
+        {"id": "p1", "text": "randomized controlled trial n=200", "citation_count": 100},
+        {"id": "p2", "text": "randomized controlled trial n=200", "citation_count": 100},
+        {"id": "p3", "text": "cohort study n=200", "citation_count": 100},
+    ]
+    claims = []
+    for claim, paper in zip([positive_1, positive_2, negative], papers):
+        claims.extend(attach_provenance([claim], paper))
+
+    agreements = weighted_agreements(claims)
+
+    assert agreements
+    assert {agreement.verdict for agreement in agreements} == {"Agree"}
+    assert agreements[0].weighted_agreement == 0.727
+
+    # A disagreement becomes an uncertainty-priority gap with the paper's
+    # citation/reliability weighted formula.
+    negative.study_reliability = 1.0
+    agreements = weighted_agreements(claims)
+    gaps = uncertainty_priorities(claims, agreements)
+    assert agreements[0].verdict == "Partial Agreement"
+    assert gaps and gaps[0].gap_signals["uncertainty_impact"] > 0

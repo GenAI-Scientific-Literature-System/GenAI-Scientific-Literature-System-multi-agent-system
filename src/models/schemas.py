@@ -64,6 +64,13 @@ class Claim:
     assumptions: List[Assumption] = field(default_factory=list)
     uncertainty: float        = 0.0
     paper_id: str             = ""
+    # GLAS-Med clinical provenance.  These remain optional so cached and
+    # non-medical records created by earlier versions remain readable.
+    extraction_confidence: float = 0.5
+    evidence_tier: int        = 5
+    study_reliability: float  = 0.0
+    pico: dict                = field(default_factory=dict)
+    provenance: dict          = field(default_factory=dict)
 
     @property
     def text(self):
@@ -86,6 +93,9 @@ class Agreement:
     assumption_overlap: float = 0.0
     agreement_basis: str  = ""  # "identical-sets|disjoint|partial|predicate|path"
     shared_assumptions: list = field(default_factory=list)  # IDs in A1∩A2
+    pico_cluster: str        = ""
+    weighted_agreement: float = 0.0
+    verdict: str             = "Insufficient Evidence"
 
     def to_dict(self):
         return asdict(self)

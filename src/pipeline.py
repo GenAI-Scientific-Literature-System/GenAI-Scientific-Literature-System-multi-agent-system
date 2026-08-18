@@ -35,6 +35,7 @@ from src.struct                    import MERLINStruct
 from src.reasoning                 import formal_score
 from src.assumption_engine         import validate_all as ace_validate
 from src.llm_client            import get_token_usage, reset_token_log
+from src.glas_med import attach_provenance, uncertainty_priorities, weighted_agreements
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class MERLINResult:
         self.token_stats:         Dict[str, Any]           = {}
         self.ace_report:          Dict[str, Any]           = {}
         self.hallucination_report: HallucinationReport     = HallucinationReport()
+        self.clinical_reliability: List[Dict[str, Any]]    = []
 
     def to_dict(self) -> Dict[str, Any]:
         contradictions = sum(1 for a in self.agreements if a.relation == "contradict")
@@ -73,6 +75,7 @@ class MERLINResult:
             "hallucination_report": self.hallucination_report.to_dict(),
             "ace_report":           self.ace_report,
             "token_stats":          self.token_stats,
+            "clinical_reliability": self.clinical_reliability,
             "meta": {
                 "elapsed_sec":          round(self.elapsed_sec, 2),
                 "total_claims":         len(self.claims),
@@ -124,7 +127,10 @@ def run_pipeline(papers: List[Dict[str, str]]) -> MERLINResult:
                 object=d.get("object",""), method=d.get("method",""),
                 domain=d.get("domain",""), paper_id=pid,
             ) for d in cached["claims"]]
+            claims = attach_provenance(claims, paper)
             all_claims.extend(claims)
+            self_report = claims[0].provenance if claims else {}
+            result.clinical_reliability.append({"paper_id": pid, **self_report})
             continue
 
         # Agent 1 [V1]
@@ -137,6 +143,12 @@ def run_pipeline(papers: List[Dict[str, str]]) -> MERLINResult:
 
         # Agent 3
         claims = normalise_claims(claims)
+        # Paper Agent 3: eight-dimensional clinical reliability assessment.
+        # Low-rho studies are retained as provenance but excluded from weighted
+        # consensus by Agent 4.
+        claims = attach_provenance(claims, paper)
+        if claims:
+            result.clinical_reliability.append({"paper_id": pid, **claims[0].provenance})
 
         # Agent 6
         assumptions = extract_assumptions(text, claims, retriever=retriever)
@@ -184,14 +196,18 @@ def run_pipeline(papers: List[Dict[str, str]]) -> MERLINResult:
     # PHASE 2 — REASONING  (struct + Claim objects only)
     # ══════════════════════════════════════════════════════════════════════════
 
-    # Agent 4: set-op decides relation, LLM only writes reason
-    agreements        = compute_agreements(all_claims, struct)
+    # Paper Agent 4: group comparable claims into PICO clusters and calculate
+    # reliability-weighted agreement.  This supersedes the previous
+    # assumption-set relation heuristic for the clinical API.
+    agreements        = weighted_agreements(all_claims)
     result.agreements = agreements
     hr.v3_reasons_rewritten = sum(
         1 for a in agreements if a.reason and a.reason.startswith("[Auto-summary]")
     )
 
-    # Agent 5: uncertainty propagation
+    # Paper Agent 5: priority is driven by unresolved disagreement and the
+    # reliability/citation-weighted uncertainty impact index U_k.
+    clinical_gaps = uncertainty_priorities(all_claims, agreements)
     all_claims    = propagate_uncertainty(all_claims, agreements)
     result.claims = all_claims
 
@@ -207,7 +223,7 @@ def run_pipeline(papers: List[Dict[str, str]]) -> MERLINResult:
     # Gap detection: graph-first, LLM labels only
     raw_gaps, v4_dropped = detect_gaps(all_claims, edg)
     hr.v4_gaps_dropped   = v4_dropped
-    result.gaps          = raw_gaps
+    result.gaps          = clinical_gaps or raw_gaps
 
     # Token accounting
     tok = get_token_usage()

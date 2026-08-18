@@ -50,7 +50,13 @@ def normalise_claims(claims: List[Claim]) -> List[Claim]:
     Normalises predicates and domains for consistency.
     """
     for c in claims:
-        c.predicate = _normalise_field(c.predicate, PREDICATE_MAP)
+        # Preserve the clinical direction of a risk finding.  Collapsing
+        # "increases risk" into the generic positive verb "improves" would
+        # incorrectly erase a contradiction before GLAS-Med Agent 4 sees it.
+        if re.search(r"increase", c.predicate or "", re.I) and re.search(r"risk|adverse|harm", c.object or "", re.I):
+            c.predicate = "increases_risk"
+        else:
+            c.predicate = _normalise_field(c.predicate, PREDICATE_MAP)
         c.domain    = _normalise_field(c.domain,    DOMAIN_MAP)
     logger.info("Agent 3: Normalised %d claims (rule-based, 0 tokens).", len(claims))
     return claims

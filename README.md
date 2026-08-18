@@ -1,6 +1,6 @@
-# Multi-Agent Generative AI System for Scientific Literature Analysis
+# GLAS-Med: Generative Literature Analysis System for Medicine
 
-> A modular, evidence-grounded pipeline that analyses scientific literature in response to natural language queries — retrieving, clustering, and synthesising findings across papers using a coordinated agent ensemble.
+> A graph-augmented, evidence-grounded pipeline for clinical literature synthesis. It retrieves biomedical evidence, extracts verifiable clinical claims, scores study reliability, detects PICO-aligned agreement, and ranks unresolved controversies.
 
 ---
 
@@ -42,25 +42,28 @@ Semantic Embedding
 Paper Retrieval
     │
     ▼
-Similarity Graph Construction
+Agent 1: Clinical Claim Extraction + PICO Projection
     │
     ▼
-Graph-Based Clustering
+Agent 2: Evidence Collection + Oxford Tier Assignment
     │
     ▼
-Multi-Agent Analysis (Concurrent Ensemble)
+Agent 3: Eight-Factor Study Reliability (rho)
     │
-    ├── Agent 1: Claim Extraction
-    ├── Agent 2: Evidence Collection
-    ├── Agent 3: Study Reliability
-    ├── Agent 4: Agreement Detection
-    └── Agent 5: Uncertainty Priority
+    ▼
+Medical Knowledge Graph Construction
+    │
+    ▼
+Agent 4: PICO-Clustered Reliability-Weighted Agreement (A_k)
+    │
+    ▼
+Agent 5: Uncertainty-Impact Research Gap Priority (U_k)
     │
     ▼
 Ranked Results
 ```
 
-The architecture follows a **modular pipeline** — each stage is independently developed, tested, and integrated.
+The architecture follows the paper's strictly sequenced clinical pipeline. Existing validation and provenance checks remain in place as internal safeguards; they do not replace the five clinical agents.
 
 ---
 
@@ -68,13 +71,13 @@ The architecture follows a **modular pipeline** — each stage is independently 
 
 | Agent | Role |
 |-------|------|
-| **Agent 1** | Extracts principal scientific claims from each paper |
-| **Agent 2** | Collects supporting or contradicting evidence spans |
-| **Agent 3** | Evaluates study reliability using methodological signals |
-| **Agent 4** | Detects cross-paper agreement and disagreement |
-| **Agent 5** | Prioritises unresolved questions by importance and contention |
+| **Agent 1** | Extracts clinical subject-predicate-object claims and attaches PICO/provenance fields |
+| **Agent 2** | Collects evidence spans and stratifies study designs into Oxford evidence tiers |
+| **Agent 3** | Scores reliability from design, sample size, blinding, follow-up, statistics, sponsorship, preregistration, and journal impact |
+| **Agent 4** | Computes (A_k = \sum_{c_i \in F_k^*}\rho_i\sigma_i / \sum_{c_j \in C_k}\rho_j\sigma_j) for each PICO cluster |
+| **Agent 5** | Ranks unresolved clusters with (U_k = (1-A_k)\bar{\rho}_k\log(1+\bar{c}_k)) |
 
-All agents run concurrently as an ensemble over the clustered paper set.
+Low-reliability studies (rho < 0.45) stay visible in provenance but are quarantined from the Agent 4 consensus calculation.
 
 ---
 

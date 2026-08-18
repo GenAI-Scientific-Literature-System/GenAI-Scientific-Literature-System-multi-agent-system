@@ -7,6 +7,7 @@ UPGRADE: accepts a DocumentRetriever — sends only the relevant chunks
          Token reduction: ~80 %.
 """
 import logging
+import re
 from typing import List, Tuple, Optional
 from src.models.schemas import Claim
 from src.llm_client import call_llm, sanitize_for_prompt
@@ -17,6 +18,36 @@ logger = logging.getLogger(__name__)
 
 # Query used to retrieve claim-relevant chunks
 _CLAIM_QUERY = "main claims findings results contributions conclusions"
+
+
+def _heuristic_claims(text: str, paper_id: str) -> List[Claim]:
+    """Grounded fallback for when the configured clinical LLM is unavailable.
+
+    It intentionally only emits sentences containing a result-direction cue;
+    every field is derived from that sentence, so the normal V1 guard can
+    reject it just like an LLM-produced claim.
+    """
+    cues = re.compile(r"\b(reduce[sd]?|decrease[sd]?|improve[sd]?|increase[sd]?|associated with|no (?:significant )?(?:effect|difference)|effective|ineffective)\b", re.I)
+    split = re.compile(r"(?<=[.!?])\s+")
+    claims: List[Claim] = []
+    for sentence in split.split(text or ""):
+        if not cues.search(sentence):
+            continue
+        words = sentence.strip().split()
+        if len(words) < 5:
+            continue
+        match = cues.search(sentence)
+        subject = " ".join(words[:max(1, min(7, len(sentence[:match.start()].split())))])
+        predicate = match.group(0).lower()
+        object_ = sentence[match.end():].strip(" .;:")[:180]
+        if subject and object_:
+            claims.append(Claim(
+                subject=subject, predicate=predicate, object=object_,
+                domain="clinical", paper_id=paper_id, extraction_confidence=0.5,
+            ))
+        if len(claims) >= 5:
+            break
+    return claims
 
 
 def extract_claims(
@@ -43,8 +74,10 @@ def extract_claims(
 
     raw_claims: List[Claim] = []
     if not result:
-        logger.warning("Agent 1: No result from Mistral (paper='%s').", paper_id)
-        return raw_claims, 0
+        logger.warning("Agent 1: LLM unavailable; using grounded clinical heuristic (paper='%s').", paper_id)
+        raw_claims = _heuristic_claims(text, paper_id)
+        grounded, dropped, _ = filter_hallucinated_claims(raw_claims, text)
+        return grounded, dropped
 
     raw_list = result.get("claims", result) if isinstance(result, dict) else result
     if not isinstance(raw_list, list):
@@ -64,6 +97,7 @@ def extract_claims(
             method=str(item.get("method", "")).strip(),
             domain=str(item.get("domain", "")).strip(),
             paper_id=paper_id,
+            extraction_confidence=float(item.get("confidence", 0.5) or 0.5),
         )
         raw_claims.append(c)
 
