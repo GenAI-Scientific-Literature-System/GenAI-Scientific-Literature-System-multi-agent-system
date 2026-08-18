@@ -558,7 +558,51 @@ body {
 .ubar-fill  { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--green), var(--amber), var(--red)); }
 .ubar-label { font-size: 9px; color: var(--text-3); margin-top: 3px; font-family: var(--font-mono); }
 
-/* Agreement card — Clean, High-Readability Sequential Layout */
+/* Agreement comparison */
+.agreement-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.agreement-summary-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.agreement-summary-kicker {
+  color: var(--accent);
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.agreement-summary-copy strong { font-size: 13px; }
+.agreement-summary-note { color: var(--text-2); font-size: 11px; }
+.agreement-summary-stats {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.agreement-stat {
+  padding: 4px 8px;
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  color: var(--text-2);
+  font: 10px var(--font-mono);
+  white-space: nowrap;
+}
+.agreement-stat b { margin-right: 3px; color: var(--text); }
+.agreement-stat.agree b { color: var(--green); }
+.agreement-stat.contradict b { color: var(--red); }
+.agreement-stat.conditional b { color: var(--amber); }
+
 .agreement-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -582,6 +626,12 @@ body {
   padding-bottom: 12px;
   margin-bottom: 12px;
   border-bottom: 1px solid var(--border2);
+}
+.ag-heading { display: flex; align-items: center; gap: 8px; }
+.ag-index {
+  color: var(--text-3);
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.06em;
 }
 .ag-status-badge {
   display: inline-flex;
@@ -609,6 +659,17 @@ body {
 .ag-conf { color: var(--accent); font-weight: 600; }
 .ag-dot { opacity: 0.5; }
 .ag-basis-text { color: var(--text-2); }
+.ag-confidence-track {
+  height: 3px;
+  margin: -4px 0 12px;
+  background: var(--surface3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ag-confidence-fill { height: 100%; border-radius: inherit; }
+.ag-confidence-fill.agree { background: var(--green); }
+.ag-confidence-fill.contradict { background: var(--red); }
+.ag-confidence-fill.conditional { background: var(--amber); }
 
 .ag-claim-item {
   padding: 10px 14px;
@@ -653,10 +714,19 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 6px 0 8px 12px;
+  margin: 6px 0 8px;
   font-size: 11.5px;
   font-weight: 600;
   font-family: var(--font-mono);
+}
+.ag-relation-line { height: 1px; flex: 1; background: var(--border2); }
+.ag-relation-chip {
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 .ag-relation-divider.agree       { color: var(--green); }
 .ag-relation-divider.contradict  { color: var(--red); }
@@ -681,6 +751,15 @@ body {
   background: var(--surface2);
   border: 1px solid var(--border2);
   color: var(--accent);
+}
+
+@media (max-width: 700px) {
+  .agreement-summary { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .agreement-summary-stats { width: 100%; }
+  .agreement-stat { flex: 1; text-align: center; }
+  .ag-top-row { align-items: flex-start; flex-direction: column; }
+  .ag-meta-info { flex-wrap: wrap; line-height: 1.5; }
+  .ag-claim-header { align-items: flex-start; flex-wrap: wrap; }
 }
 
 /* Gap card */
@@ -1378,4 +1457,3 @@ body {
   font-size: 10px;
   color: var(--text-3);
 }
-

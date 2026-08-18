@@ -891,7 +891,28 @@ function renderAgreements(agreements, claims) {
     return;
   }
 
-  el.innerHTML = validAgreements.map(a => {
+  const relationCounts = validAgreements.reduce((counts, agreement) => {
+    const relation = String(agreement.relation || '').toLowerCase();
+    if (relation.includes('contradict')) counts.contradict += 1;
+    else if (relation.includes('agree')) counts.agree += 1;
+    else counts.conditional += 1;
+    return counts;
+  }, { agree: 0, contradict: 0, conditional: 0 });
+
+  const summary = `
+    <div class="agreement-summary">
+      <div class="agreement-summary-copy">
+        <span class="agreement-summary-kicker">Evidence comparison</span>
+        <strong>${validAgreements.length} cross-claim relationship${validAgreements.length === 1 ? '' : 's'}</strong>
+      </div>
+      <div class="agreement-summary-stats" aria-label="Agreement totals">
+        <span class="agreement-stat agree"><b>${relationCounts.agree}</b> agree</span>
+        <span class="agreement-stat contradict"><b>${relationCounts.contradict}</b> contradict</span>
+        <span class="agreement-stat conditional"><b>${relationCounts.conditional}</b> conditional</span>
+      </div>
+    </div>`;
+
+  el.innerHTML = summary + validAgreements.map((a, index) => {
     const ci = cm[a.claim_i_id] || { id: a.claim_i_id, text: a.claim_i_id, paper_id: 'Study A' };
     const cj = cm[a.claim_j_id] || { id: a.claim_j_id, text: a.claim_j_id, paper_id: 'Study B' };
 
@@ -900,7 +921,7 @@ function renderAgreements(agreements, claims) {
     
     const relIcon = rel === 'agree' ? '✓' : (rel === 'contradict' ? '⚡' : '↹');
     const relLabel = rel === 'agree' ? 'AGREEMENT' : (rel === 'contradict' ? 'CONTRADICTION' : 'CONDITIONAL');
-    const relationPhrase = rel === 'agree' ? '↳ Corroborates / Agrees with' : (rel === 'contradict' ? '↳ Directly Contradicts' : '↳ Conditionally Qualified by');
+    const relationPhrase = rel === 'agree' ? 'Corroborates' : (rel === 'contradict' ? 'Contradicts' : 'Conditionally relates to');
 
     const tierA = (ci.provenance && (ci.provenance.design_tier || ci.provenance.evidence_tier)) || ci.evidence_tier || 3;
     const tierB = (cj.provenance && (cj.provenance.design_tier || cj.provenance.evidence_tier)) || cj.evidence_tier || 3;
@@ -925,15 +946,22 @@ function renderAgreements(agreements, claims) {
       'path-inference': 'Epistemic Path Inference'
     };
     const basisDisplay = basisMap[a.agreement_basis] || a.agreement_basis || 'Epistemic Consensus';
+    const confidence = Math.max(0, Math.min(1, Number(a.confidence || 0.95)));
 
     return `<div class="agreement-card ${rel}">
       <div class="ag-top-row">
-        <span class="ag-status-badge ${rel}">${relIcon} ${relLabel}</span>
+        <div class="ag-heading">
+          <span class="ag-index">${String(index + 1).padStart(2, '0')}</span>
+          <span class="ag-status-badge ${rel}">${relIcon} ${relLabel}</span>
+        </div>
         <div class="ag-meta-info">
-          <span class="ag-conf">${((a.confidence || 0.95) * 100).toFixed(0)}% Confidence</span>
+          <span class="ag-conf">${(confidence * 100).toFixed(0)}% confidence</span>
           <span class="ag-dot">·</span>
           <span class="ag-basis-text">Basis: ${esc(basisDisplay)}</span>
         </div>
+      </div>
+      <div class="ag-confidence-track" aria-label="${(confidence * 100).toFixed(0)} percent confidence">
+        <div class="ag-confidence-fill ${rel}" style="width:${confidence * 100}%"></div>
       </div>
 
       <div class="ag-claim-item">
@@ -946,7 +974,9 @@ function renderAgreements(agreements, claims) {
       </div>
 
       <div class="ag-relation-divider ${rel}">
-        <span>${relationPhrase}</span>
+        <span class="ag-relation-line"></span>
+        <span class="ag-relation-chip">${relIcon} ${relationPhrase}</span>
+        <span class="ag-relation-line"></span>
       </div>
 
       <div class="ag-claim-item">
