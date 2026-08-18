@@ -1,5 +1,5 @@
 /* ── MERLIN Frontend ───────────────────────────────────────────────────── */
-const API = 'http://localhost:5000';
+const API = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin !== 'null') ? window.location.origin : 'http://localhost:5000';
 let lastResult = null;
 let queuedFiles = [];
 const queryInput = document.getElementById('query-input');
