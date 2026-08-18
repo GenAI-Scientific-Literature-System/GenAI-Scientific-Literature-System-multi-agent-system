@@ -39,6 +39,22 @@ def test_case_series_uses_case_based_evidence_tier():
     assert evidence_tier("A case series described outcomes for 20 patients.") == 4
 
 
+def test_pico_overlap_requires_meaningful_intervention_and_outcome():
+    from src.glas_med import _pico_overlap
+
+    generic_a = Claim(subject="adults with obesity", predicate="reduce", object="obesity")
+    generic_a.pico = {"intervention": "adults with obesity", "outcome": "reduce obesity"}
+    generic_b = Claim(subject="adolescent obesity", predicate="associated with", object="type 2 diabetes")
+    generic_b.pico = {"intervention": "adolescent obesity", "outcome": "type 2 diabetes"}
+    assert _pico_overlap(generic_a, generic_b) is False
+
+    semaglutide_a = Claim(subject="semaglutide", predicate="reduces", object="body weight")
+    semaglutide_a.pico = {"intervention": "semaglutide", "outcome": "body weight"}
+    semaglutide_b = Claim(subject="semaglutide", predicate="improves", object="weight loss")
+    semaglutide_b.pico = {"intervention": "semaglutide", "outcome": "weight loss"}
+    assert _pico_overlap(semaglutide_a, semaglutide_b) is True
+
+
 def test_normalisation_preserves_harmful_risk_direction():
     from src.agents.agent3_normalize import normalise_claims
 

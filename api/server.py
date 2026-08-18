@@ -65,6 +65,10 @@ SEARCH_REVIEW_MIN_TITLE_COVERAGE = 0.03
 SEARCH_REVIEW_REL_TITLE_COVERAGE = 0.30
 SEARCH_REVIEW_SCORE_RATIO = 0.30
 SEARCH_REVIEW_MIN_SCORE = 0.8
+# Keep the retrieval pool stable across UI paper-count settings. The requested
+# value is applied by _select_search_candidates after ranking, so larger values
+# extend the analyzed set instead of changing the underlying search results.
+SEARCH_RETRIEVAL_POOL_PER_SOURCE = 20
 
 
 def _normalize_retrieved_paper(paper: dict) -> dict | None:
@@ -415,7 +419,7 @@ def search_sources():
     domains = _resolve_domains(data.get("domains"), query)
 
     try:
-        retriever = Retriever(top_k_per_source=top_k_per_source, debug=False)
+        retriever = Retriever(top_k_per_source=SEARCH_RETRIEVAL_POOL_PER_SOURCE, debug=False)
         raw_papers = retriever.retrieve(query=query, domains=domains)
         normalized = [_normalize_retrieved_paper(p) for p in raw_papers]
         papers = [p for p in normalized if p]

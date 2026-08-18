@@ -17,6 +17,11 @@ from src.models.schemas import Agreement, Claim, RelationType, ResearchGap
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 _STOPWORDS = {"with", "from", "that", "this", "these", "those", "study", "patients", "patient", "using", "were", "was", "and", "the", "for", "into"}
+_GENERIC_PICO_TOKENS = {
+    "adult", "adults", "adolescent", "adolescents", "child", "children",
+    "patient", "patients", "participant", "participants", "people", "person",
+    "obesity", "overweight", "disease", "condition", "health", "clinical",
+}
 
 
 def _text_tokens(value: str) -> set[str]:
@@ -111,19 +116,21 @@ def _cluster_key(claim: Claim) -> str:
 def _pico_overlap(left: Claim, right: Claim) -> bool:
     """Match semantically similar PICO records despite different result phrasing."""
     left_pico, right_pico = left.pico or pico_for_claim(left), right.pico or pico_for_claim(right)
-    intervention_left = _text_tokens(left_pico.get("intervention", ""))
-    intervention_right = _text_tokens(right_pico.get("intervention", ""))
+    intervention_left = _text_tokens(left_pico.get("intervention", "")) - _GENERIC_PICO_TOKENS
+    intervention_right = _text_tokens(right_pico.get("intervention", "")) - _GENERIC_PICO_TOKENS
     outcome_left = _text_tokens(left_pico.get("outcome", ""))
     outcome_right = _text_tokens(right_pico.get("outcome", ""))
     if not intervention_left or not intervention_right or not outcome_left or not outcome_right:
         return False
     shared_intervention = intervention_left & intervention_right
     shared_outcome = outcome_left & outcome_right
+    if not shared_intervention or not shared_outcome:
+        return False
     if shared_intervention and shared_outcome:
         return True
     intervention_overlap = len(shared_intervention) / len(intervention_left | intervention_right)
     outcome_overlap = len(shared_outcome) / len(outcome_left | outcome_right)
-    return (intervention_overlap >= 0.20 and outcome_overlap >= 0.15) or bool(shared_intervention and outcome_overlap >= 0.10)
+    return intervention_overlap >= 0.20 and outcome_overlap >= 0.15
 
 
 def _direction(claim: Claim) -> str:
