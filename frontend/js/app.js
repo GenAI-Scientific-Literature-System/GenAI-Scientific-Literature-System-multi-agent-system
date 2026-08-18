@@ -39,13 +39,70 @@ function updateRunButtonState() {
   }
 }
 
-window.applyPreset = function(type) {
-  const presets = {
-    metformin: "Metformin reduces oxidative stress and modulates aging pathways",
-    nsclc: "Pembrolizumab versus chemotherapy overall survival in NSCLC",
-    ad: "Anti-amyloid monoclonal antibodies versus tau neuroinflammation in Alzheimer's disease",
-  };
-  const q = presets[type];
+const DEFAULT_PRESETS = [
+  { label: '🎯 Metformin & Aging', query: 'Metformin reduces oxidative stress and modulates aging pathways' },
+  { label: '🫁 Pembrolizumab NSCLC', query: 'Pembrolizumab versus chemotherapy overall survival in NSCLC' },
+  { label: '🧠 Amyloid vs Tau in AD', query: "Anti-amyloid monoclonal antibodies versus tau neuroinflammation in Alzheimer's disease" }
+];
+
+function getRecentQueries() {
+  try {
+    const raw = localStorage.getItem('glas_med_recent_queries');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return DEFAULT_PRESETS;
+}
+
+function saveRecentQuery(query) {
+  if (!query || typeof query !== 'string' || !query.trim()) return;
+  const q = query.trim();
+  try {
+    let recent = getRecentQueries();
+    recent = recent.filter(item => {
+      const existing = typeof item === 'string' ? item : item.query;
+      return existing.toLowerCase() !== q.toLowerCase();
+    });
+    const label = q.length > 28 ? q.slice(0, 26) + '…' : q;
+    recent.unshift({ label: `🔍 ${label}`, query: q });
+    recent = recent.slice(0, 3);
+    localStorage.setItem('glas_med_recent_queries', JSON.stringify(recent));
+    renderQueryPresets();
+  } catch (e) {}
+}
+
+function renderQueryPresets() {
+  const container = document.getElementById('query-presets');
+  if (!container) return;
+  const queries = getRecentQueries();
+  container.innerHTML = '';
+  queries.forEach(item => {
+    const label = typeof item === 'string' ? item : item.label;
+    const q = typeof item === 'string' ? item : item.query;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preset-pill';
+    btn.title = q;
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      if (queryInput) {
+        queryInput.value = q;
+        updateRunButtonState();
+        queryInput.focus();
+        const fetchBtn = document.getElementById('btn-fetch');
+        if (fetchBtn && !fetchBtn.disabled) fetchBtn.click();
+      }
+    });
+    container.appendChild(btn);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', renderQueryPresets);
+renderQueryPresets();
+
+window.applyPreset = function(q) {
   if (!q) return;
   const input = document.getElementById('query-input');
   if (input) {
@@ -392,6 +449,7 @@ async function runAnalysis(papers) {
 }
 
 async function fetchSourcesForQuery(query) {
+  saveRecentQuery(query);
   resetEmptyState();
   updatePipelineStatus('Searching', 'Retrieval');
   showLoader();

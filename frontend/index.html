@@ -40,11 +40,7 @@
       <div class="query-zone">
         <label class="query-label" for="query-input">Research Query</label>
         <textarea id="query-input" class="query-input" rows="4" placeholder="Example: Do large language models hallucinate in medical contexts?"></textarea>
-        <div class="query-presets" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;margin-bottom:8px;">
-          <button type="button" class="preset-pill" onclick="applyPreset('metformin')">🎯 Metformin &amp; Aging</button>
-          <button type="button" class="preset-pill" onclick="applyPreset('nsclc')">🫁 Pembrolizumab NSCLC</button>
-          <button type="button" class="preset-pill" onclick="applyPreset('ad')">🧠 Amyloid vs Tau in AD</button>
-        </div>
+        <div id="query-presets" class="query-presets" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;margin-bottom:8px;"></div>
         <div class="query-options">
           <label class="query-topk-label" for="top-k-input">Papers per source</label>
           <input id="top-k-input" class="query-topk-input" type="number" min="1" max="20" value="5"/>
