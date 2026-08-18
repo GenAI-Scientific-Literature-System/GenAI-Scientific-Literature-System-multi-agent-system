@@ -75,8 +75,31 @@ def extract_claims(
 
     raw_claims: List[Claim] = []
     if not result:
-        logger.warning("Agent 1: LLM unavailable; using grounded clinical heuristic (paper='%s').", paper_id)
-        raw_claims = _heuristic_claims(text, paper_id)
+        # 1. Primary path: BioBERT Transformer NER Extraction
+        try:
+            from services.common.biobert import BioBERTClaimExtractor
+            extractor = BioBERTClaimExtractor(auto_load=True)
+            biobert_raw = extractor.extract(text, paper_id=paper_id)
+            if biobert_raw and extractor._is_loaded:
+                for b_item in biobert_raw:
+                    raw_claims.append(Claim(
+                        id=b_item.get("id", ""),
+                        subject=b_item.get("subject", ""),
+                        predicate=b_item.get("predicate", ""),
+                        object=b_item.get("object", ""),
+                        domain="clinical",
+                        paper_id=paper_id,
+                        extraction_confidence=b_item.get("extraction_confidence", 0.85),
+                    ))
+                logger.info("Agent 1: Extracted %d claims via BioBERT NER (paper='%s').", len(raw_claims), paper_id)
+        except Exception as e:
+            logger.debug("BioBERT inference exception in Agent 1: %s", e)
+
+        # 2. Fallback to Grounded Heuristic if BioBERT is not available
+        if not raw_claims:
+            logger.warning("Agent 1: LLM/BioBERT unavailable; using grounded clinical heuristic (paper='%s').", paper_id)
+            raw_claims = _heuristic_claims(text, paper_id)
+
         grounded, dropped, _ = filter_hallucinated_claims(raw_claims, text)
         return grounded, dropped
 
