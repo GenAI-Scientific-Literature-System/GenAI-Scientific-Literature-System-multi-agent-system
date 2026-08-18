@@ -40,6 +40,11 @@
       <div class="query-zone">
         <label class="query-label" for="query-input">Research Query</label>
         <textarea id="query-input" class="query-input" rows="4" placeholder="Example: Do large language models hallucinate in medical contexts?"></textarea>
+        <div class="query-presets" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;margin-bottom:8px;">
+          <button type="button" class="preset-pill" onclick="applyPreset('metformin')">🎯 Metformin &amp; Aging</button>
+          <button type="button" class="preset-pill" onclick="applyPreset('nsclc')">🫁 Pembrolizumab NSCLC</button>
+          <button type="button" class="preset-pill" onclick="applyPreset('ad')">🧠 Amyloid vs Tau in AD</button>
+        </div>
         <div class="query-options">
           <label class="query-topk-label" for="top-k-input">Papers per source</label>
           <input id="top-k-input" class="query-topk-input" type="number" min="1" max="20" value="5"/>
@@ -203,10 +208,10 @@
 
       <!-- Tabs -->
       <div class="tab-nav">
-        <button class="tab-btn active" data-tab="sources">Sources</button>
-        <button class="tab-btn" data-tab="claims">Claims</button>
-        <button class="tab-btn" data-tab="agreements">Agreements</button>
-        <button class="tab-btn" data-tab="gaps">Research Gaps</button>
+        <button class="tab-btn active" data-tab="sources">Sources <span class="tab-badge" id="badge-sources"></span></button>
+        <button class="tab-btn" data-tab="claims">Claims <span class="tab-badge" id="badge-claims"></span></button>
+        <button class="tab-btn" data-tab="agreements">Agreements <span class="tab-badge" id="badge-agreements"></span></button>
+        <button class="tab-btn" data-tab="gaps">Research Gaps <span class="tab-badge" id="badge-gaps"></span></button>
         <button class="tab-btn" data-tab="graph">Medical KG</button>
         <button class="tab-btn" data-tab="diagnostics">Diagnostics</button>
       </div>
@@ -271,6 +276,7 @@
             <button class="btn-ghost filter-btn" id="btn-filter-unquarantined" onclick="setGraphFilter('unquarantined')" style="padding:3px 10px;font-size:11px;border-radius:6px;">Hide Quarantined (ρ &lt; 0.45)</button>
             <button class="btn-ghost filter-btn" id="btn-filter-high-rel" onclick="setGraphFilter('high_rel')" style="padding:3px 10px;font-size:11px;border-radius:6px;">High Reliability (ρ &ge; 0.70)</button>
             <button class="btn-ghost filter-btn" id="btn-filter-agreed" onclick="setGraphFilter('agreed')" style="padding:3px 10px;font-size:11px;border-radius:6px;">Agreements Only</button>
+            <button class="btn-ghost filter-btn" id="btn-expand-canvas" onclick="toggleFullscreenGraph()" style="margin-left:auto;padding:3px 10px;font-size:11px;border-radius:6px;">⛶ Expand Canvas</button>
           </div>
           <canvas id="edg-canvas" width="760" height="420" style="cursor: crosshair;"></canvas>
           

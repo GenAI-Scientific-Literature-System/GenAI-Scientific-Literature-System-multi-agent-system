@@ -27,18 +27,41 @@ function updatePipelineStatus(status, stage) {
   if (stageValue) stageValue.textContent = stage || 'Ready';
 }
 
-updatePipelineStatus('Idle', 'Ready');
-
-function updateRunButtonState() {
-  const btn = document.getElementById('btn-fetch');
-  const analyseBtn = document.getElementById('btn-analyse');
-  const hasQuery = !!(queryInput && queryInput.value.trim());
-  if (btn) btn.disabled = !(hasQuery || queuedFiles.length);
-  if (analyseBtn) analyseBtn.style.display = hasQuery ? 'none' : (queuedFiles.length ? 'flex' : 'none');
-  if (btn) {
-    btn.style.display = hasQuery ? 'flex' : (queuedFiles.length ? 'none' : 'flex');
+window.applyPreset = function(type) {
+  const presets = {
+    metformin: "Metformin reduces oxidative stress and modulates aging pathways",
+    nsclc: "Pembrolizumab versus chemotherapy overall survival in NSCLC",
+    ad: "Anti-amyloid monoclonal antibodies versus tau neuroinflammation in Alzheimer's disease",
+  };
+  const q = presets[type];
+  if (!q) return;
+  if (queryInput) {
+    queryInput.value = q;
+    queryInput.focus();
+    updateRunButtonState();
+    const btn = document.getElementById('btn-fetch');
+    if (btn && !btn.disabled) btn.click();
   }
-}
+};
+
+window.toggleFullscreenGraph = function() {
+  const wrap = document.querySelector('.edg-wrap');
+  const canvas = document.getElementById('edg-canvas');
+  const btn = document.getElementById('btn-expand-canvas');
+  if (!wrap || !canvas) return;
+  wrap.classList.toggle('fullscreen-edg');
+  const isFull = wrap.classList.contains('fullscreen-edg');
+  if (btn) btn.textContent = isFull ? '✕ Collapse Canvas' : '⛶ Expand Canvas';
+  if (isFull) {
+    canvas.width = window.innerWidth - 60;
+    canvas.height = window.innerHeight - 160;
+  } else {
+    canvas.width = 760;
+    canvas.height = 420;
+  }
+  _edgLayoutSig = '';
+  if (lastResult && lastResult.graph) renderEDG(lastResult.graph);
+};
 
 /* ── THEME ─────────────────────────────────────────────────────────────── */
 (function () {
@@ -496,6 +519,17 @@ function renderResults(data) {
   const aceEl = document.getElementById('tok-ace');
   if (aceEl) aceEl.textContent = (data.ace_report?.rejected || 0);
 
+  // Tab count badges
+  const bSources = document.getElementById('badge-sources');
+  const bClaims = document.getElementById('badge-claims');
+  const bAgreements = document.getElementById('badge-agreements');
+  const bGaps = document.getElementById('badge-gaps');
+  const pCount = (data.query_context?.pipeline_papers || data.query_context?.papers || pendingPapers || []).length;
+  if (bSources) bSources.textContent = pCount ? `(${pCount})` : '';
+  if (bClaims) bClaims.textContent = (data.claims||[]).length ? `(${(data.claims||[]).length})` : '';
+  if (bAgreements) bAgreements.textContent = (data.agreements||[]).length ? `(${(data.agreements||[]).length})` : '';
+  if (bGaps) bGaps.textContent = (data.gaps||[]).length ? `(${(data.gaps||[]).length})` : '';
+
   updateTokenDashboard(meta, data.token_stats);
   updatePaperSources(data.query_context?.pipeline_papers || data.query_context?.papers || []);
   renderDiagnostics(data);
@@ -509,6 +543,8 @@ function renderResults(data) {
 function updatePaperSources(papers, allowRemoval = false) {
   const list = document.getElementById('sources-list');
   const rows = Array.isArray(papers) ? papers : [];
+  const bSources = document.getElementById('badge-sources');
+  if (bSources) bSources.textContent = rows.length ? `(${rows.length})` : '';
 
   if (!list) return;
 
@@ -659,6 +695,15 @@ function renderClaims(claims) {
   if (!claims.length) { el.innerHTML='<div class="empty-msg">No claims extracted.</div>'; return; }
   el.innerHTML = claims.map(c => {
     const assumptions = c.assumptions || [];
+    const rel = (c.provenance && c.provenance.study_reliability !== undefined) ? c.provenance.study_reliability : (c.study_reliability || 0.85);
+    const tier = (c.provenance && c.provenance.evidence_tier) || 'Tier 1 · RCT';
+    const isQuarantined = (c.provenance && c.provenance.quarantined);
+    const factors = (c.provenance && c.provenance.reliability_factors) || {};
+    const factorEntries = Object.entries(factors);
+    const factorList = factorEntries.length
+      ? factorEntries.map(([k,v]) => `<div>${esc(k.replace(/_/g,' '))}</div><div>${typeof v === 'number' ? (v>=0?'+':'')+v.toFixed(2) : esc(String(v))}</div>`).join('')
+      : '';
+
     const assumptionBlock = assumptions.length
       ? `<div class="assumption-section">
           <div class="assumption-label">Assumptions (${assumptions.length})</div>
@@ -689,10 +734,19 @@ function renderClaims(claims) {
       </div>
       <div class="claim-meta">
         ${c.paper_url ? `<a class="meta-pill paper-link" href="${esc(c.paper_url)}" target="_blank" rel="noopener noreferrer">open paper</a>` : ''}
+        <span class="meta-pill ${isQuarantined ? 'ev-low' : (rel>=0.7?'ev-high':'ev-medium')}">
+          ρ = ${rel.toFixed(2)} · ${esc(tier)} ${isQuarantined ? '(QUARANTINED)' : ''}
+        </span>
         ${c.domain ? `<span class="meta-pill">${esc(c.domain)}</span>` : ''}
         ${c.method ? `<span class="meta-pill">${esc(c.method)}</span>` : ''}
-        ${c.evidence_strength ? `<span class="meta-pill ev-${c.evidence_strength}">evidence: ${esc(c.evidence_strength)}</span>` : ''}
       </div>
+      ${factorList ? `
+      <details class="rel-breakdown-card" style="margin: 6px 0;">
+        <summary style="cursor:pointer;font-weight:600;font-size:10.5px;color:var(--accent);">🔍 8-Factor Reliability Breakdown (ρ = ${rel.toFixed(2)})</summary>
+        <div class="rel-factor-grid" style="margin-top:6px;">
+          ${factorList}
+        </div>
+      </details>` : ''}
       ${assumptionBlock}
       <div class="ubar-wrap">
         <div class="ubar-track"><div class="ubar-fill" style="width:${Math.round((c.uncertainty||0)*100)}%"></div></div>
@@ -710,6 +764,7 @@ function basisExplanation(basis, shared) {
     'partial-overlap':     'Partial assumption overlap — context-dependent',
     'predicate-heuristic': 'Determined by predicate opposition',
     'path-inference':      'Inferred via EDG shortest path',
+    'pico-reliability-weighted': 'PICO reliability-weighted consensus',
     'no-assumptions':      'No assumptions on either claim',
     'default':             'No structural signal found',
   };
@@ -731,11 +786,22 @@ function renderAgreements(agreements, claims) {
     const rawRel = a.relation || 'unrelated';
     const rel = rawRel === 'contradict' ? 'conditional' : rawRel;
     const basis = basisExplanation(a.agreement_basis, a.shared_assumptions);
+
+    const p1 = (ci && ci.pico) || {};
+    const int1 = p1.intervention || ci?.subject || '';
+    const out1 = p1.outcome || ci?.object || '';
+    const picoChips = int1 || out1 ? `
+      <div class="ag-pico" style="margin: 4px 0;">
+        ${int1 ? `<span class="pico-chip int">💊 ${esc(int1.slice(0,32))}</span>` : ''}
+        ${out1 ? `<span class="pico-chip out">🎯 ${esc(out1.slice(0,32))}</span>` : ''}
+      </div>` : '';
+
     return `<div class="agreement-card ${rel}">
       <div class="ag-top">
         <div class="rel-badge ${rel}">${rel.toUpperCase()}</div>
         <span class="ag-conf">${((a.confidence||0)*100).toFixed(0)}% conf</span>
       </div>
+      ${picoChips}
       <div class="ag-claims">[C1] ${t1}…<br>[C2] ${t2}…</div>
       <div class="ag-basis">
         <span class="basis-icon">⊕</span>
