@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Namespace
+metadata: {name: glas-med}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: glas-med-config, namespace: glas-med}
+data: {MONGO_URI: mongodb://mongodb:27017, NEO4J_URI: bolt://neo4j:7687, REDIS_URL: redis://redis:6379/0, KAFKA_BOOTSTRAP_SERVERS: kafka:9092}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: glas-med-services, namespace: glas-med}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: glas-med-services}}
+  template:
+    metadata: {labels: {app: glas-med-services}}
+    spec:
+      containers:
+        - {name: session-manager, image: glas-med:latest, args: [uvicorn, services.session_manager.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
+        - {name: inference-server, image: glas-med:latest, args: [uvicorn, services.inference_server.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
+        - {name: tool-collector, image: glas-med:latest, args: [uvicorn, services.tool_collector.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
+        - {name: medical-data-layer, image: glas-med:latest, args: [uvicorn, services.data_layer.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
+        - {name: agent1-worker, image: glas-med:latest, args: [uvicorn, services.agent1_worker.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
+        - {name: graph-generator, image: glas-med:latest, args: [uvicorn, services.graph_generator.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
+        - {name: graph-collector, image: glas-med:latest, args: [uvicorn, services.graph_collector.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
+        - {name: mas-orchestrator, image: glas-med:latest, args: [uvicorn, services.mas_orchestrator.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
+        - {name: frontend, image: nginx:alpine}

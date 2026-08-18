@@ -79,6 +79,16 @@ The architecture follows the paper's strictly sequenced clinical pipeline. Exist
 
 Low-reliability studies (rho < 0.45) stay visible in provenance but are quarantined from the Agent 4 consensus calculation.
 
+## Local microservice stack
+
+The paper-aligned runtime is separate from the legacy Flask dashboard under `services/`. It provides nine service boundaries: session manager, inference server, tool collector, medical data layer, Agent 1 worker, graph generator, graph collector, MAS orchestrator, and frontend. The data layer persists documents in MongoDB, represents paper-to-claim relationships in Neo4j, and exposes a FAISS-ready vector interface; it has an in-memory fallback for local unit tests.
+
+```bash
+docker compose -f docker-compose.glas-med.yml up --build
+```
+
+The data layer is exposed at `http://localhost:8001`, the orchestrator at `http://localhost:8002`, and the frontend at `http://localhost:8080`. Kubernetes definitions are in `k8s/glas-med.yaml`; build and publish the `glas-med:latest` image before applying them.
+
 ---
 
 ## Dataset Preparation
