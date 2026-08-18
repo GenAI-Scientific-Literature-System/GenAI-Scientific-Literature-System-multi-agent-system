@@ -27,6 +27,18 @@ function updatePipelineStatus(status, stage) {
   if (stageValue) stageValue.textContent = stage || 'Ready';
 }
 
+function updateRunButtonState() {
+  const btn = document.getElementById('btn-fetch');
+  const analyseBtn = document.getElementById('btn-analyse');
+  const input = document.getElementById('query-input');
+  const hasQuery = !!(input && input.value.trim());
+  if (btn) btn.disabled = !(hasQuery || queuedFiles.length);
+  if (analyseBtn) analyseBtn.style.display = hasQuery ? 'none' : (queuedFiles.length ? 'flex' : 'none');
+  if (btn) {
+    btn.style.display = hasQuery ? 'flex' : (queuedFiles.length ? 'none' : 'flex');
+  }
+}
+
 window.applyPreset = function(type) {
   const presets = {
     metformin: "Metformin reduces oxidative stress and modulates aging pathways",
@@ -35,10 +47,11 @@ window.applyPreset = function(type) {
   };
   const q = presets[type];
   if (!q) return;
-  if (queryInput) {
-    queryInput.value = q;
-    queryInput.focus();
+  const input = document.getElementById('query-input');
+  if (input) {
+    input.value = q;
     updateRunButtonState();
+    input.focus();
     const btn = document.getElementById('btn-fetch');
     if (btn && !btn.disabled) btn.click();
   }
@@ -1110,23 +1123,35 @@ function _drawEDG() {
     ctx.globalAlpha = 1; ctx.setLineDash([]);
   });
 
+  // Graph filter check for empty state
+  const claimMap = Object.fromEntries((lastResult?.claims || []).map(c => [c.id, c]));
+  const isNodeFilteredOut = (n) => {
+    const claimObj = claimMap[n.id];
+    const rel = (n.reliability !== undefined) ? n.reliability : ((claimObj && claimObj.provenance && claimObj.provenance.study_reliability) ?? (claimObj && claimObj.study_reliability) ?? 0.85);
+    if (currentGraphFilter === 'unquarantined') {
+      return (rel < 0.45 || (claimObj && claimObj.provenance && claimObj.provenance.quarantined));
+    } else if (currentGraphFilter === 'high_rel') {
+      return rel < 0.70;
+    } else if (currentGraphFilter === 'agreed') {
+      return !edges.some(e => (e.source === n.id || e.target === n.id) && (e.relation === 'agree' || e.relation === 'AGREE'));
+    }
+    return false;
+  };
+
+  const visibleCount = nodes.filter(n => !isNodeFilteredOut(n)).length;
+  if (!visibleCount) {
+    ctx.restore();
+    ctx.fillStyle = dark ? '#8890b0' : '#555870';
+    ctx.font = '13px JetBrains Mono,monospace'; ctx.textAlign = 'center';
+    const filterLabel = currentGraphFilter === 'high_rel' ? 'High Reliability (ρ ≥ 0.70)' : currentGraphFilter === 'unquarantined' ? 'Unquarantined' : currentGraphFilter;
+    ctx.fillText(`All studies in this query have ρ < 0.70 — 0 nodes match filter: "${filterLabel}"`, W/2, H/2);
+    return;
+  }
+
   // Nodes
   nodes.forEach(n => {
     const p = pos[n.id]; if (!p) return;
-    
-    // Graph interactive filter
-    let isFilteredOut = false;
-    if (currentGraphFilter === 'unquarantined') {
-      const rel = (n.reliability !== undefined) ? n.reliability : ((n.provenance && n.provenance.study_reliability) ?? 1.0);
-      if (rel < 0.45 || (n.provenance && n.provenance.quarantined)) isFilteredOut = true;
-    } else if (currentGraphFilter === 'high_rel') {
-      const rel = (n.reliability !== undefined) ? n.reliability : ((n.provenance && n.provenance.study_reliability) ?? 0);
-      if (rel < 0.70) isFilteredOut = true;
-    } else if (currentGraphFilter === 'agreed') {
-      const hasAgree = edges.some(e => (e.source === n.id || e.target === n.id) && (e.relation === 'agree' || e.relation === 'AGREE'));
-      if (!hasAgree) isFilteredOut = true;
-    }
-    if (isFilteredOut) return;
+    if (isNodeFilteredOut(n)) return;
     const isClaim   = n.type === 'claim';
     const isGap     = n.gap_region === true;
     const r         = p.r;

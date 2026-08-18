@@ -51,6 +51,10 @@ class EpistemicDependencyGraph:
             "type": "claim", "text": claim.text, "domain": claim.domain,
             "method": claim.method, "uncertainty": claim.uncertainty,
             "paper_id": claim.paper_id,
+            "study_reliability": claim.study_reliability,
+            "reliability": claim.study_reliability,
+            "evidence_tier": claim.evidence_tier,
+            "provenance": claim.provenance,
         }
         self._nodes[claim.id] = data
         if HAS_NX:
