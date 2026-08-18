@@ -1,3 +1,4 @@
-# agents/claim_extraction/__init__.py
-from agents.claim_extraction.claim_extraction_agent import ClaimExtractionAgent
-__all__ = ["ClaimExtractionAgent"]
+from .claim_extraction_agent import ClaimExtractionAgent
+from .claim_extractor import ClaimExtractor
+
+__all__ = ["ClaimExtractionAgent", "ClaimExtractor"]
