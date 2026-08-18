@@ -30,9 +30,9 @@ def evidence_tier(text: str, metadata: dict[str, Any] | None = None) -> int:
         return 1
     if re.search(r"randomi[sz]ed|\brct\b|controlled trial|clinical trial|\bphase [1-4]\b|double[- ]blind|placebo[- ]controlled", haystack):
         return 2
-    if re.search(r"prospective cohort|retrospective cohort|\bcohort study|\blongitudinal|\bobservational study", haystack):
+    if re.search(r"prospective cohort|retrospective cohort|\bcohort\b|\blongitudinal\b|\bobservational\b|real[- ]world|subgroup analys|registry study", haystack):
         return 3
-    if re.search(r"case[- ]control|cross[- ]sectional|case series|case report", haystack):
+    if re.search(r"case[- ]control|cross[- ]sectional", haystack):
         return 4
     return 5
 
@@ -79,7 +79,10 @@ def pico_for_claim(claim: Claim) -> dict[str, str]:
 
 
 def attach_provenance(claims: Iterable[Claim], paper: dict[str, Any]) -> list[Claim]:
-    report = study_reliability(paper.get("text", ""), paper)
+    full_text = paper.get("text") or paper.get("abstract") or paper.get("summary") or ""
+    if paper.get("title") and paper.get("title") not in full_text:
+        full_text = f"{paper.get('title')}. {full_text}"
+    report = study_reliability(full_text, paper)
     for claim in claims:
         claim.extraction_confidence = max(0.0, min(1.0, float(getattr(claim, "extraction_confidence", 0.5) or 0.5)))
         claim.evidence_tier = report["tier"]

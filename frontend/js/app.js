@@ -711,10 +711,10 @@ function renderClaims(claims) {
     const rel = (c.provenance && c.provenance.study_reliability !== undefined) ? c.provenance.study_reliability : (c.study_reliability || 0.85);
     const tierMap = {
       1: 'Tier 1 · Meta-Analysis',
-      2: 'Tier 2 · RCT',
+      2: 'Tier 2 · RCT / Trial',
       3: 'Tier 3 · Cohort Study',
       4: 'Tier 4 · Case-Control',
-      5: 'Tier 5 · In Vitro / Preclinical'
+      5: 'Tier 5 · Observational / In Vitro'
     };
     const rawTier = (c.provenance && (c.provenance.design_tier || c.provenance.evidence_tier)) || c.evidence_tier || 2;
     const tier = tierMap[rawTier] || (typeof rawTier === 'string' ? rawTier : `Tier ${rawTier}`);
