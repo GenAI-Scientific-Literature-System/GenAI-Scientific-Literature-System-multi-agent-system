@@ -709,7 +709,15 @@ function renderClaims(claims) {
   el.innerHTML = claims.map(c => {
     const assumptions = c.assumptions || [];
     const rel = (c.provenance && c.provenance.study_reliability !== undefined) ? c.provenance.study_reliability : (c.study_reliability || 0.85);
-    const tier = (c.provenance && c.provenance.evidence_tier) || 'Tier 1 · RCT';
+    const tierMap = {
+      1: 'Tier 1 · Meta-Analysis',
+      2: 'Tier 2 · RCT',
+      3: 'Tier 3 · Cohort Study',
+      4: 'Tier 4 · Case-Control',
+      5: 'Tier 5 · In Vitro / Preclinical'
+    };
+    const rawTier = (c.provenance && (c.provenance.design_tier || c.provenance.evidence_tier)) || c.evidence_tier || 2;
+    const tier = tierMap[rawTier] || (typeof rawTier === 'string' ? rawTier : `Tier ${rawTier}`);
     const isQuarantined = (c.provenance && c.provenance.quarantined);
     const factors = (c.provenance && c.provenance.reliability_factors) || {};
     const factorEntries = Object.entries(factors);
