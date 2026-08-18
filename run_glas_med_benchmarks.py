@@ -206,14 +206,16 @@ def run_dynamic_benchmarks():
     # ── PART 3: Dynamic Component Ablation Study ──────────────────────────────
     print("\n[Part 3] Dynamically Computing Component Ablation on Evidence Synthesis...")
     from src.graph.edg import build_edg
-    
+    from src.agents.agent5_uncertainty import propagate_uncertainty
     from src.reasoning import formal_score
 
-    # 1. Full System (GLAS-Med)
+    # 1. Full System (GLAS-Med Proposed)
     full_claims = []
+    dropped_v1_count = 0
     for item in CLINICAL_BENCHMARK_DATA:
         p = item["paper"]
-        ext, _ = extract_claims(p["abstract"], paper_id=p["id"])
+        ext, dropped = extract_claims(p["abstract"], paper_id=p["id"])
+        dropped_v1_count += dropped
         for c in ext:
             res = study_reliability(p["abstract"], {"study_design": p["design"], "sample_size": p["sample_size"], "double_blind": p["double_blind"]})
             c.study_reliability = res["score"]
@@ -222,6 +224,7 @@ def run_dynamic_benchmarks():
     full_agreements = weighted_agreements(full_claims)
     full_edg = build_edg(full_claims, full_agreements)
     full_gaps, _ = detect_gaps(full_claims, full_edg)
+    full_claims = propagate_uncertainty(full_claims, full_agreements)
 
     full_contra = sum(1 for a in full_agreements if a.relation == "contradict")
     full_avg_u = float(np.mean([c.uncertainty for c in full_claims])) if full_claims else 0.0
@@ -229,24 +232,31 @@ def run_dynamic_benchmarks():
 
     from src.struct import MERLINStruct
 
-    # 2. Ablation: Without 8-factor reliability
-    no_rel_claims = [Claim(id=c.id, subject=c.subject, predicate=c.predicate, object=c.object, uncertainty=0.35) for c in full_claims]
+    # 2. Ablation: Without 8-Factor Reliability (ρ)
+    no_rel_claims = [Claim(id=c.id, subject=c.subject, predicate=c.predicate, object=c.object, uncertainty=0.5) for c in full_claims]
     struct_no_rel = MERLINStruct.build(no_rel_claims, [])
     no_rel_agreements = compute_agreements(no_rel_claims, struct_no_rel)
+    no_rel_claims = propagate_uncertainty(no_rel_claims, no_rel_agreements)
     no_rel_contra = sum(1 for a in no_rel_agreements if a.relation == "contradict")
-    no_rel_avg_u = float(np.mean([c.uncertainty for c in no_rel_claims])) if no_rel_claims else 0.35
-    no_rel_loss = formal_score(no_rel_contra, len(no_rel_agreements), no_rel_avg_u, assumption_rejection_rate=0.15)
+    no_rel_avg_u = float(np.mean([c.uncertainty for c in no_rel_claims])) if no_rel_claims else 0.0
+    no_rel_loss = formal_score(no_rel_contra, len(no_rel_agreements), no_rel_avg_u, assumption_rejection_rate=0.0)
 
-    # 3. Ablation: Without PICO clustering
+    # 3. Ablation: Without PICO Consensus Clustering
     struct_no_pico = MERLINStruct.build(full_claims, [])
     no_pico_agreements = compute_agreements(full_claims, struct_no_pico)
+    no_pico_claims = propagate_uncertainty(list(full_claims), no_pico_agreements)
     no_pico_contra = sum(1 for a in no_pico_agreements if a.relation == "contradict")
-    no_pico_avg_u = float(np.mean([c.uncertainty for c in full_claims])) if full_claims else 0.20
-    no_pico_loss = formal_score(no_pico_contra, len(no_pico_agreements), no_pico_avg_u, assumption_rejection_rate=0.20)
+    no_pico_avg_u = float(np.mean([c.uncertainty for c in no_pico_claims])) if no_pico_claims else 0.0
+    no_pico_loss = formal_score(no_pico_contra, len(no_pico_agreements), no_pico_avg_u, assumption_rejection_rate=0.0)
 
-    # 4. Ablation: Vanilla RAG (Flat baseline without multi-agent verification)
-    rag_contra = max(1, len(full_claims) // 2)
-    rag_loss = formal_score(rag_contra, max(len(full_claims), 1), avg_uncertainty=0.70, assumption_rejection_rate=0.45)
+    # 4. Ablation: Vanilla Single-Pass RAG (Uncalibrated, flat retrieval without multi-agent verification)
+    raw_rag_claims = [Claim(id=f"rag_{c.id}", subject=c.subject, predicate=c.predicate, object=c.object, uncertainty=0.5) for c in full_claims]
+    struct_rag = MERLINStruct.build(raw_rag_claims, [])
+    rag_agreements = compute_agreements(raw_rag_claims, struct_rag)
+    rag_contra = sum(1 for a in rag_agreements if a.relation == "contradict")
+    rag_avg_u = float(np.mean([c.uncertainty for c in raw_rag_claims])) if raw_rag_claims else 0.5
+    rag_rej_rate = float(dropped_v1_count / max(len(raw_rag_claims) + dropped_v1_count, 1))
+    rag_loss = formal_score(rag_contra, len(rag_agreements), rag_avg_u, assumption_rejection_rate=rag_rej_rate)
     rag_f1 = max(0.0, mean_f1 - 0.274)
 
     print(f"  • Full GLAS-Med MAS (Proposed)       | Pairs: {len(full_agreements):<3} | Gaps: {len(full_gaps):<2} | Epistemic Loss: {full_loss:.3f}")

@@ -3,19 +3,10 @@ kind: Namespace
 metadata:
   name: glas-med
 ---
-# NOTE: In production, inject this secret externally via:
+# PREREQUISITE: Create the external secret BEFORE deploying this manifest:
 # kubectl create secret generic glas-med-secrets -n glas-med \
 #   --from-literal=NEO4J_USER=neo4j \
 #   --from-literal=NEO4J_PASSWORD=$(openssl rand -hex 16)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: glas-med-secrets
-  namespace: glas-med
-type: Opaque
-stringData:
-  NEO4J_USER: "neo4j"
-  NEO4J_PASSWORD: "CHANGE_ME_VIA_KUBECTL_SECRET"
 ---
 apiVersion: v1
 kind: ConfigMap
