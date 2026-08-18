@@ -74,7 +74,8 @@ class Claim:
 
     @property
     def text(self):
-        return f"{self.subject} {self.predicate} {self.object}"
+        clean_pred = (self.predicate or "").replace("_", " ")
+        return f"{self.subject} {clean_pred} {self.object}".strip()
 
     def to_dict(self):
         d = asdict(self)

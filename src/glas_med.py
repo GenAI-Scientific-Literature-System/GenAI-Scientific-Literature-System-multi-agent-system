@@ -25,14 +25,14 @@ def _text_tokens(value: str) -> set[str]:
 
 def evidence_tier(text: str, metadata: dict[str, Any] | None = None) -> int:
     """Return the Oxford-style evidence tier (1 is strongest)."""
-    haystack = f"{text or ''} {(metadata or {}).get('study_design', '')}".lower()
-    if re.search(r"systematic review|meta[- ]analysis", haystack):
+    haystack = f"{text or ''} {(metadata or {}).get('study_design', '')} {(metadata or {}).get('title', '')}".lower()
+    if re.search(r"systematic review|meta[- ]analysis|\bcochrane\b", haystack):
         return 1
-    if re.search(r"randomi[sz]ed|\brct\b|controlled trial", haystack):
+    if re.search(r"randomi[sz]ed|\brct\b|controlled trial|clinical trial|\bphase [1-4]\b|double[- ]blind|placebo[- ]controlled", haystack):
         return 2
-    if re.search(r"prospective cohort|retrospective cohort|\bcohort study", haystack):
+    if re.search(r"prospective cohort|retrospective cohort|\bcohort study|\blongitudinal|\bobservational study", haystack):
         return 3
-    if re.search(r"case[- ]control|cross[- ]sectional", haystack):
+    if re.search(r"case[- ]control|cross[- ]sectional|case series|case report", haystack):
         return 4
     return 5
 

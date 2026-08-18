@@ -125,16 +125,19 @@ class BioBERTClaimExtractor:
             chem_entities = [e["text"] for e in entities if "chem" in e.get("label", "").lower() or "drug" in e.get("label", "").lower() or "med" in e.get("label", "").lower()]
             dis_entities = [e["text"] for e in entities if "dis" in e.get("label", "").lower() or "out" in e.get("label", "").lower()]
 
-            subject = " ".join(chem_entities) if chem_entities else before[-120:]
+            clean_before = re.sub(r"^(?:with|nevertheless|however|furthermore|moreover|consequently|therefore|in addition|overall|specifically|herein|we show that|we found that|results demonstrate that|results show that|it is shown that|together,?\s*these findings indicate that)\s*,?\s*", "", before, flags=re.I).strip()
+            clean_before = re.sub(r"\b(?:projected to|likely to|expected to|shown to|demonstrated to)\b", "", clean_before, flags=re.I).strip()
+
+            subject = " ".join(chem_entities) if chem_entities else (clean_before or before)[-120:]
             obj = " ".join(dis_entities) if dis_entities else after[:240]
 
-            if before and after:
+            if subject and obj:
                 claims.append({
                     "id": f"{paper_id}:claim:{index}",
                     "paper_id": paper_id,
-                    "subject": subject or before[-120:],
+                    "subject": subject,
                     "predicate": predicate,
-                    "object": obj or after[:240],
+                    "object": obj,
                     "extraction_confidence": round(model_conf if entities else 0.85, 3),
                     "model": self.model_name if self._is_loaded else "BioBERT-RuleEngine-Hybrid",
                     "entities": entities,
