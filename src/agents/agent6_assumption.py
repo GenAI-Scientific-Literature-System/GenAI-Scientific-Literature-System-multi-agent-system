@@ -73,8 +73,20 @@ def _heuristic_assumptions(text: str, paper_id: str = "") -> List[Assumption]:
     """Grounded clinical fallback to extract study methodology assumptions from text."""
     import re
     assumptions = []
-    # Identify sample size constraints
-    n_match = re.search(r"\b(?:n\s*=\s*|sample size of\s*)(\d+)\b", text, re.I)
+    # Identify study design & methodology constraints (METHOD)
+    design_match = re.search(r"\b(phase \d+[^,.;]*|double-blind|randomized trial|cohort study|meta-analysis|placebo-controlled|multicenter trial)\b", text, re.I)
+    if design_match:
+        assumptions.append(Assumption(
+            id=f"{paper_id}_a_method" if paper_id else str(uuid.uuid4())[:8],
+            type=AssumptionType.METHOD,
+            constraint=f"study design: {design_match.group(1).strip()}",
+            explicit=True,
+            span=design_match.group(0),
+            verification=VerificationStatus.VERIFIED,
+            score=1.0
+        ))
+    # Identify sample size constraints (STATISTICAL)
+    n_match = re.search(r"\b(?:n\s*=\s*|sample size of\s*|\bwith\s*)(\d+)\s*(?:patients|participants|subjects|individuals)\b", text, re.I)
     if n_match:
         assumptions.append(Assumption(
             id=f"{paper_id}_a_sample" if paper_id else str(uuid.uuid4())[:8],
@@ -85,8 +97,8 @@ def _heuristic_assumptions(text: str, paper_id: str = "") -> List[Assumption]:
             verification=VerificationStatus.VERIFIED,
             score=1.0
         ))
-    # Identify trial design / population constraints
-    pop_match = re.search(r"\b(patients with [^,.;]+|adults with [^,.;]+|early [^,.;]+ disease|phase \d+[^,.;]*)\b", text, re.I)
+    # Identify population / disease scope constraints (SCOPE)
+    pop_match = re.search(r"\b(patients with [^,.;]+|adults with [^,.;]+|early [^,.;]+ disease)\b", text, re.I)
     if pop_match:
         assumptions.append(Assumption(
             id=f"{paper_id}_a_pop" if paper_id else str(uuid.uuid4())[:8],
@@ -97,7 +109,7 @@ def _heuristic_assumptions(text: str, paper_id: str = "") -> List[Assumption]:
             verification=VerificationStatus.VERIFIED,
             score=1.0
         ))
-    # Identify duration/followup constraints
+    # Identify duration/followup constraints (METHOD)
     dur_match = re.search(r"\b(\d+\s+(?:months|weeks|years|days)(?:\s+follow[- ]up)?)\b", text, re.I)
     if dur_match:
         assumptions.append(Assumption(
@@ -159,7 +171,7 @@ def extract_assumptions(
 
 
 def assign_assumptions_to_claims(claims: List[Claim], assumptions: List[Assumption]) -> List[Claim]:
-    """Keyword-overlap matching — zero LLM tokens."""
+    """Keyword-overlap matching with paper-level fallback — zero LLM tokens."""
     import re
     for claim in claims:
         claim_words = set(re.split(r'\W+', f"{claim.subject} {claim.object} {claim.method}".lower()))
@@ -169,4 +181,7 @@ def assign_assumptions_to_claims(claims: List[Claim], assumptions: List[Assumpti
             )
             if len(constraint_words & claim_words) >= 1:
                 claim.assumptions.append(assumption)
+        # If no specific keyword match, associate the paper-level study assumptions
+        if not claim.assumptions and assumptions:
+            claim.assumptions.extend(assumptions)
     return claims

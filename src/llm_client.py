@@ -376,6 +376,9 @@ def call_llm(
 
                 except requests.RequestException as e:
                     logger.warning("Network error on %s: %s", current_model, e)
+                    if hasattr(e, "response") and e.response is not None and e.response.status_code in (401, 403, 404):
+                        force_next_model = True
+                        break
                 except (KeyError, IndexError) as e:
                     logger.warning("Bad response shape on %s: %s", current_model, e)
 
