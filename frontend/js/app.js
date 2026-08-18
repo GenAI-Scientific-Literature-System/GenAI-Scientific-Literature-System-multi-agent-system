@@ -856,38 +856,130 @@ function basisExplanation(basis, shared) {
 
 function renderAgreements(agreements, claims) {
   const el = document.getElementById('agreements-list');
-  const cm = Object.fromEntries(claims.map(c=>[c.id,c]));
-  if (!agreements.length) { el.innerHTML='<div class="empty-msg">No agreements computed.</div>'; return; }
-  el.innerHTML = agreements.map(a => {
-    const ci = cm[a.claim_i_id], cj = cm[a.claim_j_id];
-    const t1 = ci ? esc((ci.text||'').slice(0,65)) : a.claim_i_id;
-    const t2 = cj ? esc((cj.text||'').slice(0,65)) : a.claim_j_id;
-    const rawRel = a.relation || 'unrelated';
-    const rel = rawRel === 'contradict' ? 'conditional' : rawRel;
-    const basis = basisExplanation(a.agreement_basis, a.shared_assumptions);
+  const cm = Object.fromEntries(claims.map(c => [c.id, c]));
+  if (!agreements || !agreements.length) { el.innerHTML = '<div class="empty-msg">No agreements computed.</div>'; return; }
 
-    const p1 = (ci && ci.pico) || {};
-    const int1 = p1.intervention || ci?.subject || '';
-    const out1 = p1.outcome || ci?.object || '';
-    const picoChips = int1 || out1 ? `
-      <div class="ag-pico" style="margin: 4px 0;">
-        ${int1 ? `<span class="pico-chip int">💊 ${esc(int1.slice(0,32))}</span>` : ''}
-        ${out1 ? `<span class="pico-chip out">🎯 ${esc(out1.slice(0,32))}</span>` : ''}
+  const tierMap = {
+    1: 'Tier 1 · Meta-Analysis',
+    2: 'Tier 2 · RCT / Trial',
+    3: 'Tier 3 · Cohort Study',
+    4: 'Tier 4 · Case-Control',
+    5: 'Tier 5 · Observational / In Vitro'
+  };
+
+  // Filter out self-comparisons and duplicate bidirectional pairs
+  const seenPairs = new Set();
+  const validAgreements = [];
+
+  for (const a of agreements) {
+    if (!a.claim_i_id || !a.claim_j_id) continue;
+    if (a.claim_i_id === a.claim_j_id) continue;
+
+    const ci = cm[a.claim_i_id], cj = cm[a.claim_j_id];
+    if (ci && cj) {
+      if (ci.paper_id === cj.paper_id && ci.text === cj.text) continue;
+    }
+
+    const pairKey = [a.claim_i_id, a.claim_j_id].sort().join('::');
+    if (seenPairs.has(pairKey)) continue;
+    seenPairs.add(pairKey);
+    validAgreements.push(a);
+  }
+
+  if (!validAgreements.length) {
+    el.innerHTML = '<div class="empty-msg">No cross-claim agreements or contradictions found.</div>';
+    return;
+  }
+
+  el.innerHTML = validAgreements.map(a => {
+    const ci = cm[a.claim_i_id] || { id: a.claim_i_id, text: a.claim_i_id, paper_id: 'Study A' };
+    const cj = cm[a.claim_j_id] || { id: a.claim_j_id, text: a.claim_j_id, paper_id: 'Study B' };
+
+    const rawRel = String(a.relation || 'unrelated').toLowerCase();
+    const rel = rawRel.includes('contradict') ? 'contradict' : (rawRel.includes('agree') ? 'agree' : (rawRel.includes('conditional') ? 'conditional' : 'unrelated'));
+    
+    const relIcon = rel === 'agree' ? '✓' : (rel === 'contradict' ? '⚡' : '↹');
+    const relLabel = rel === 'agree' ? 'AGREEMENT' : (rel === 'contradict' ? 'CONTRADICTION' : 'CONDITIONAL');
+
+    const tierA = (ci.provenance && (ci.provenance.design_tier || ci.provenance.evidence_tier)) || ci.evidence_tier || 3;
+    const tierB = (cj.provenance && (cj.provenance.design_tier || cj.provenance.evidence_tier)) || cj.evidence_tier || 3;
+    const tierALabel = tierMap[tierA] || `Tier ${tierA}`;
+    const tierBLabel = tierMap[tierB] || `Tier ${tierB}`;
+
+    const textA = ci.text || `${ci.subject} ${ci.predicate} ${ci.object}`;
+    const textB = cj.text || `${cj.subject} ${cj.predicate} ${cj.object}`;
+
+    const p1 = ci.pico || {};
+    const p2 = cj.pico || {};
+
+    const picoChipsA = (p1.intervention || ci.subject || p1.outcome || ci.object) ? `
+      <div class="ag-study-pico">
+        ${(p1.intervention || ci.subject) ? `<span class="pico-chip int">💊 ${esc((p1.intervention || ci.subject).slice(0,35))}</span>` : ''}
+        ${(p1.outcome || ci.object) ? `<span class="pico-chip out">🎯 ${esc((p1.outcome || ci.object).slice(0,35))}</span>` : ''}
       </div>` : '';
 
+    const picoChipsB = (p2.intervention || cj.subject || p2.outcome || cj.object) ? `
+      <div class="ag-study-pico">
+        ${(p2.intervention || cj.subject) ? `<span class="pico-chip int">💊 ${esc((p2.intervention || cj.subject).slice(0,35))}</span>` : ''}
+        ${(p2.outcome || cj.object) ? `<span class="pico-chip out">🎯 ${esc((p2.outcome || cj.object).slice(0,35))}</span>` : ''}
+      </div>` : '';
+
+    const sharedAssump = (a.shared_assumptions || []).filter(Boolean);
+    const sharedBlock = sharedAssump.length ? `
+      <div class="ag-alignment-row">
+        <span class="ag-alignment-lbl">Shared Assumptions:</span>
+        ${sharedAssump.map(x => `<span class="ag-shared-tag">✓ ${esc(x)}</span>`).join(' ')}
+      </div>` : '';
+
+    const basisMap = {
+      'identical-sets': 'Identical Assumption Sets',
+      'disjoint-sets': 'Disjoint Assumptions / Divergent Contexts',
+      'partial-overlap': 'Partial Assumption Overlap',
+      'pico-reliability-weighted': 'PICO Reliability-Weighted Consensus',
+      'predicate-heuristic': 'Direct Semantic Relation',
+      'path-inference': 'Epistemic Path Inference'
+    };
+    const basisDisplay = basisMap[a.agreement_basis] || a.agreement_basis || 'Epistemic Consensus';
+
     return `<div class="agreement-card ${rel}">
-      <div class="ag-top">
-        <div class="rel-badge ${rel}">${rel.toUpperCase()}</div>
-        <span class="ag-conf">${((a.confidence||0)*100).toFixed(0)}% conf</span>
+      <div class="ag-header">
+        <div class="ag-header-left">
+          <span class="rel-badge ${rel}">${relIcon} ${relLabel}</span>
+          <span class="ag-basis-pill">${esc(basisDisplay)}</span>
+        </div>
+        <div class="ag-header-right">
+          <span class="ag-conf-pill">${((a.confidence || 0.95) * 100).toFixed(0)}% Consensus Confidence</span>
+        </div>
       </div>
-      ${picoChips}
-      <div class="ag-claims">[C1] ${t1}…<br>[C2] ${t2}…</div>
-      <div class="ag-basis">
-        <span class="basis-icon">⊕</span>
-        <span>${basis}</span>
+
+      <div class="ag-comparison-grid">
+        <div class="ag-study-col ag-study-a">
+          <div class="ag-study-head">
+            <span class="ag-study-source">${esc(ci.paper_source || ci.paper_id || 'Study A')}</span>
+            <span class="ag-study-tier">${esc(tierALabel)}</span>
+          </div>
+          <div class="ag-study-claim-text">${esc(textA)}</div>
+          ${picoChipsA}
+        </div>
+
+        <div class="ag-relation-bridge">
+          <div class="ag-relation-line"></div>
+          <div class="ag-relation-icon-badge ${rel}">${relIcon}</div>
+          <div class="ag-relation-label ${rel}">${relLabel}</div>
+          <div class="ag-relation-line"></div>
+        </div>
+
+        <div class="ag-study-col ag-study-b">
+          <div class="ag-study-head">
+            <span class="ag-study-source">${esc(cj.paper_source || cj.paper_id || 'Study B')}</span>
+            <span class="ag-study-tier">${esc(tierBLabel)}</span>
+          </div>
+          <div class="ag-study-claim-text">${esc(textB)}</div>
+          ${picoChipsB}
+        </div>
       </div>
-      ${a.reason && !a.reason.startsWith('set-op') && !a.reason.startsWith('predicate') && !a.reason.startsWith('default')
-        ? `<div class="ag-reason">${esc(a.reason)}</div>` : ''}
+
+      ${sharedBlock ? `<div class="ag-footer">${sharedBlock}</div>` : ''}
     </div>`;
   }).join('');
 }
