@@ -85,11 +85,17 @@ class BioBERTClaimExtractor:
                         current_label = label
                 else:
                     if current_entity and current_label:
-                        entities.append({"text": " ".join(current_entity), "label": current_label})
+                        raw_ent = " ".join(current_entity)
+                        clean_ent = re.sub(r'\s+([,.:;?!\-\(\)/])', r'\1', raw_ent)
+                        clean_ent = re.sub(r'([,.:;?!\-\(\)/])\s+', r'\1', clean_ent).strip()
+                        entities.append({"text": clean_ent, "label": current_label})
                         current_entity = []
                         current_label = None
             if current_entity and current_label:
-                entities.append({"text": " ".join(current_entity), "label": current_label})
+                raw_ent = " ".join(current_entity)
+                clean_ent = re.sub(r'\s+([,.:;?!\-\(\)/])', r'\1', raw_ent)
+                clean_ent = re.sub(r'([,.:;?!\-\(\)/])\s+', r'\1', clean_ent).strip()
+                entities.append({"text": clean_ent, "label": current_label})
 
             return entities, conf
         except Exception as e:
@@ -117,19 +123,36 @@ class BioBERTClaimExtractor:
             if not match:
                 continue
 
-            predicate = match.group(0).lower()
+            predicate = match.group(0).lower().replace("_", " ")
             before = sentence[:match.start()].strip()
             after = sentence[match.end():].strip(" .;:")
+            after_short = re.split(r';|\bhowever\b|\bnevertheless\b|\bgiven the\b', after, flags=re.I)[0].strip(' .,;:')
 
-            # Determine clinical entities
-            chem_entities = [e["text"] for e in entities if "chem" in e.get("label", "").lower() or "drug" in e.get("label", "").lower() or "med" in e.get("label", "").lower()]
-            dis_entities = [e["text"] for e in entities if "dis" in e.get("label", "").lower() or "out" in e.get("label", "").lower()]
+            # Determine clinical entities with order-preserving deduplication
+            def _dedup_list(lst: list[str]) -> list[str]:
+                seen = set()
+                out = []
+                for x in lst:
+                    clean_x = re.sub(r'\s+', ' ', x).strip()
+                    low = clean_x.lower()
+                    if low not in seen and len(low) > 1:
+                        seen.add(low)
+                        out.append(clean_x)
+                return out
 
-            clean_before = re.sub(r"^(?:with|nevertheless|however|furthermore|moreover|consequently|therefore|in addition|overall|specifically|herein|we show that|we found that|results demonstrate that|results show that|it is shown that|together,?\s*these findings indicate that)\s*,?\s*", "", before, flags=re.I).strip()
+            chem_entities = _dedup_list([e["text"] for e in entities if any(k in e.get("label", "").lower() for k in ["chem", "drug", "med"])])
+            dis_entities = _dedup_list([e["text"] for e in entities if any(k in e.get("label", "").lower() for k in ["dis", "out", "eff"])])
+
+            clean_before = re.sub(r"^(?:with|nevertheless|however|furthermore|moreover|consequently|therefore|in addition|overall|specifically|herein|we show that|we found that|results demonstrate that|results show that|it is shown that|together,?\s*these findings indicate that|exploratory subgroup analyses suggested(?: potential)?)\s*,?\s*", "", before, flags=re.I).strip()
             clean_before = re.sub(r"\b(?:projected to|likely to|expected to|shown to|demonstrated to)\b", "", clean_before, flags=re.I).strip()
+            clean_before = re.sub(r"\s+(?:vs\.?|versus|and|or|with|at|in|by|to|for|of|from)$", "", clean_before, flags=re.I).strip()
 
-            subject = " ".join(chem_entities) if chem_entities else (clean_before or before)[-120:]
-            obj = " ".join(dis_entities) if dis_entities else after[:240]
+            clean_after = re.sub(r"\s+(?:vs\.?|versus|and|or|with|at|in|by|to|for|of|from)$", "", after_short, flags=re.I).strip()
+            if clean_after.count("(") > clean_after.count(")"):
+                clean_after += ")"
+
+            subject = ", ".join(chem_entities) if chem_entities else (clean_before or before)[-100:]
+            obj = ", ".join(dis_entities) if dis_entities else clean_after[:180]
 
             if subject and obj:
                 claims.append({
