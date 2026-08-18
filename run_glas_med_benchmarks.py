@@ -152,6 +152,13 @@ def run_dynamic_benchmarks():
 
     # ── PART 2: Dynamic 5-Fold Cross-Validation ───────────────────────────────
     print("\n[Part 2] Dynamically Executing 5-Fold Cross-Validation over Clinical Corpora...")
+    from services.common.biobert import BioBERTClaimExtractor
+    sample_extractor = BioBERTClaimExtractor(auto_load=True)
+    if sample_extractor._is_loaded:
+        print(f"  • Active Engine: BioBERT Transformer NER ({sample_extractor.model_name})")
+    else:
+        print(f"  • Active Engine: Grounded Clinical Heuristic Rule Engine (Offline Environment Fallback)")
+
     fold_metrics = []
 
     for item in CLINICAL_BENCHMARK_DATA:
