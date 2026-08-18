@@ -5,22 +5,32 @@ from typing import Iterable
 
 from groq import Groq
 from agents.claim_extraction.prompt import CLAIM_EXTRACTION_PROMPT
-from utils.api_keys import ApiKeyManager
+from utils.api_keys import ApiKeyManager, load_groq_api_keys
 from utils.model_config import DEFAULT_CLAIM_EXTRACTION_MODEL, ordered_models
 
 class ClaimExtractor:
-    def __init__(self, api_key: str | Iterable[str], model: str = DEFAULT_CLAIM_EXTRACTION_MODEL):
-        self.key_manager = ApiKeyManager.from_value(api_key)
-        self.client = Groq(api_key=self.key_manager.current)
+    def __init__(self, api_key: str | Iterable[str] | None = None, model: str = DEFAULT_CLAIM_EXTRACTION_MODEL):
+        keys = api_key if api_key is not None else load_groq_api_keys()
+        self.key_manager = ApiKeyManager.from_value(keys) if keys else None
+        self.client = Groq(api_key=self.key_manager.current) if self.key_manager else None
         self.model = model
 
     def _rotate_key(self):
+        if self.key_manager is None:
+            return False
         if not self.key_manager.rotate():
             return False  # no more keys
         self.client = Groq(api_key=self.key_manager.current)
         return True
     
     def extract(self, paper_text: str) -> dict:
+        if self.client is None:
+            return {
+                "claim": None,
+                "confidence": None,
+                "reasoning": None,
+                "error": "No Groq API key configured"
+            }
         MAX_CHARS = 6000
         if len(paper_text) > MAX_CHARS:
             paper_text = paper_text[:MAX_CHARS]

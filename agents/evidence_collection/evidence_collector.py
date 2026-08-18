@@ -4,18 +4,21 @@ import json
 from typing import Iterable
 from groq import Groq
 from agents.evidence_collection.prompt import EVIDENCE_COLLECTION_PROMPT
-from utils.api_keys import ApiKeyManager
+from utils.api_keys import ApiKeyManager, load_groq_api_keys
 from utils.model_config import DEFAULT_EVIDENCE_COLLECTION_MODEL, EVIDENCE_COLLECTION_FALLBACK_MODELS, ordered_models
 
 class EvidenceCollector:
-    def __init__(self, api_key: str | Iterable[str], model: str = DEFAULT_EVIDENCE_COLLECTION_MODEL):
-        self.key_manager = ApiKeyManager.from_value(api_key)
-        self.client = Groq(api_key=self.key_manager.current)
+    def __init__(self, api_key: str | Iterable[str] | None = None, model: str = DEFAULT_EVIDENCE_COLLECTION_MODEL):
+        keys = api_key if api_key is not None else load_groq_api_keys()
+        self.key_manager = ApiKeyManager.from_value(keys) if keys else None
+        self.client = Groq(api_key=self.key_manager.current) if self.key_manager else None
         self.model = model
         self.batch_size = 4  # papers per LLM call
         self.debug = True
 
     def _rotate_key(self):
+        if self.key_manager is None:
+            return False
         if not self.key_manager.rotate():
             return False
         self.client = Groq(api_key=self.key_manager.current)
@@ -31,6 +34,8 @@ class EvidenceCollector:
         return formatted.strip()
 
     def _call_llm(self, filled_prompt: str) -> str | None:
+        if self.client is None:
+            return None
         last_error = None
         models_to_try = ordered_models(self.model, fallback_models=EVIDENCE_COLLECTION_FALLBACK_MODELS)
 

@@ -33,6 +33,12 @@ def test_low_reliability_study_is_quarantined():
     assert report["quarantined"] is True
 
 
+def test_case_series_uses_case_based_evidence_tier():
+    from src.glas_med import evidence_tier
+
+    assert evidence_tier("A case series described outcomes for 20 patients.") == 4
+
+
 def test_normalisation_preserves_harmful_risk_direction():
     from src.agents.agent3_normalize import normalise_claims
 

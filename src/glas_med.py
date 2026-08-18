@@ -32,7 +32,7 @@ def evidence_tier(text: str, metadata: dict[str, Any] | None = None) -> int:
         return 2
     if re.search(r"prospective cohort|retrospective cohort|\bcohort\b|\blongitudinal\b|\bobservational\b|real[- ]world|subgroup analys|registry study", haystack):
         return 3
-    if re.search(r"case[- ]control|cross[- ]sectional", haystack):
+    if re.search(r"case[- ]control|cross[- ]sectional|case series", haystack):
         return 4
     return 5
 

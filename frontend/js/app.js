@@ -1,5 +1,18 @@
 /* ── MERLIN Frontend ───────────────────────────────────────────────────── */
-const API = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin !== 'null') ? window.location.origin : 'http://localhost:5000';
+function resolveApiOrigin() {
+  if (typeof window === 'undefined' || !window.location || window.location.protocol === 'file:') {
+    return 'http://localhost:5000';
+  }
+  const { origin, hostname, port, protocol } = window.location;
+  if (!origin || origin === 'null') return 'http://localhost:5000';
+  // The Docker frontend is served by Nginx on :8080 while Flask owns :5000.
+  if ((hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') && port === '8080') {
+    return `${protocol}//${hostname}:5000`;
+  }
+  return origin;
+}
+
+const API = resolveApiOrigin();
 let lastResult = null;
 let queuedFiles = [];
 const queryInput = document.getElementById('query-input');

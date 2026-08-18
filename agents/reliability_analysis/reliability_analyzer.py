@@ -7,7 +7,10 @@ from .parser import parse_output
 class ReliabilityAnalyzer:
 
     def __init__(self, model_name="gpt2"):
-        self.generator = pipeline("text-generation", model=model_name)
+        try:
+            self.generator = pipeline("text-generation", model=model_name, local_files_only=True)
+        except Exception:
+            self.generator = None
 
     def llm_evaluate(self, paper_text):
         prompt = build_prompt(paper_text)
@@ -21,8 +24,23 @@ class ReliabilityAnalyzer:
         return parse_output(response)
 
     def evaluate(self, paper_text, metadata):
-        llm_result = self.llm_evaluate(paper_text)
         heuristic_score = compute_heuristic(metadata)
+
+        llm_result = None
+        if self.generator is not None:
+            try:
+                llm_result = self.llm_evaluate(paper_text)
+            except Exception:
+                llm_result = None
+
+        if llm_result is None:
+            return {
+                "final_score": round(heuristic_score, 2),
+                "llm_score": None,
+                "heuristic_score": heuristic_score,
+                "confidence": 0.0,
+                "justification": "Heuristic reliability fallback; language model unavailable."
+            }
 
         final_score = (
             0.7 * llm_result["reliability_score"] +
