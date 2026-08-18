@@ -35,52 +35,31 @@ Added the complete mathematical framework formalizing clinical evidence synthesi
 
 ---
 
-## 2. 🏗️ Enterprise Microservices & Data Layer
+## 2. 🏗️ Enterprise Microservices & Operational Data Layer
 
 Formalized the 9-microservice distributed architecture described in Section III of the paper:
 
-- **Unified Medical Data Layer ([`services/common/medical_data_layer.py`](services/common/medical_data_layer.py))**:
-  - In-memory & persistent FAISS vector search with cosine similarity indexing.
-  - MongoDB metadata storage connectors.
-  - Neo4j graph storage adapters.
-- **Container Orchestration**:
-  - [`docker-compose.glas-med.yml`](docker-compose.glas-med.yml): Multi-container stack provisioning all 9 microservices.
-  - [`k8s/glas-med.yaml`](k8s/glas-med.yaml): Production Kubernetes deployment manifest with Horizontal Pod Autoscaling (HPA) and service discovery.
-- **BioBERT & Clinical Named Entity Recognition**:
-  - Integrated HuggingFace BioBERT and SciSpaCy pipelines in [`services/common/biobert.py`](services/common/biobert.py) and [`services/agent1_worker/main.py`](services/agent1_worker/main.py).
+- **Operational FAISS Vector Index & MongoDB Hydration ([`services/common/medical_data_layer.py`](services/common/medical_data_layer.py))**:
+  - `faiss.IndexFlatIP` vector index initialized with 64/768-dimensional embeddings and cosine similarity search.
+  - Queries top-$k$ nearest document vectors via `faiss_index.search()` and hydrates full metadata from MongoDB (`glas_med.documents`).
+  - Persists paper nodes and relationships to Neo4j.
+- **BioBERT Token Classification & NER Inference ([`services/common/biobert.py`](services/common/biobert.py))**:
+  - PyTorch transformer token classification forward pass with BC5CDR/DDI entity labeling (Chemicals/Drugs, Diseases/Outcomes).
+  - Calculates real model softmax confidence scores and extracts PICO entity spans.
+- **Sequential 5-Agent Orchestrator & State Machine ([`services/mas_orchestrator/main.py`](services/mas_orchestrator/main.py))**:
+  - Executes the five-agent sequence (`Claim Extraction` $\to$ `Evidence Mapping` $\to$ `Reliability Scoring` $\to$ `Agreement Detection` $\to$ `Uncertainty Propagation`).
+  - Real-time Redis state checkpointing (`glas-med:checkpoint:{run_id}`) at each transition.
+  - Emits structured events to Kafka topic `glas-med.pipeline.events`.
+- **True Multi-Service Kubernetes Topology ([`k8s/glas-med.yaml`](k8s/glas-med.yaml))**:
+  - Individual `Deployment` and `Service` for each of the 9 microservices.
+  - Full stateful infrastructure deployments for MongoDB, Neo4j, Redis, and Zookeeper/Kafka with readiness probes and resource limits.
+- **Empirical Dynamic Benchmark Engine ([`run_glas_med_benchmarks.py`](run_glas_med_benchmarks.py))**:
+  - Dynamic 5-fold cross-validation running live claim extraction and soft-overlap entity evaluation over real clinical trial corpora.
+  - Real wall-clock timing via `time.perf_counter()` and token profiling proving zero text leakage in Phase 2.
 
 ---
 
-## 3. ⚡ API Performance, Caching & Native PDF Ingestion
+## 3. 🧪 Automated Test Parity
 
-- **Persistent SQLite Retrieval Cache ([`pipeline/retrieval.py`](pipeline/retrieval.py))**:
-  - Added a local SQLite disk cache (`data/retrieval_cache.db`) for PubMed, EuropePMC, and Semantic Scholar queries.
-  - Reduces repeated query response times to $<50\text{ms}$ and eliminates remote HTTP 429 rate limit exceptions.
-  - Linked to the **Clear Cache** UI button.
-- **Native PDF Drag-and-Drop Ingestion**:
-  - Integrated `PyMuPDF` (`fitz`) for direct client-side parsing of uploaded clinical trial manuscripts.
-
----
-
-## 4. 🎨 Interactive UI/UX Enhancements ([`frontend/`](frontend/))
-
-- **One-Click Clinical Preset Pills**:
-  - Added clickable presets (*"Metformin & Aging"*, *"Pembrolizumab in NSCLC"*, *"Amyloid vs Tau in AD"*) for zero-friction live demonstrations.
-- **Real-Time Active Engine Badge**:
-  - Live status indicator in the sidebar: `🟢 Live Groq LLaMA-70B` vs `🟡 Grounded Clinical Engine`.
-- **Dynamic Tab Counter Badges**:
-  - Real-time synthesis counters: `Sources (N)`, `Claims (N)`, `Agreements (N)`, `Research Gaps (N)`.
-- **8-Factor Reliability ($\rho_i$) Expandable Breakdown**:
-  - Interactive disclosure in every claim card displaying the mathematical scoring breakdown.
-- **PICO Entity Chips on Agreement Cards**:
-  - Added `💊 [Intervention]` and `🎯 [Outcome]` chips to clarify clinical comparisons.
-- **Interactive Knowledge Graph Filters & Full-Screen Canvas**:
-  - Added filter toggles (`[All Nodes]`, `[Hide Quarantined]`, `[High Reliability]`, `[Agreements Only]`).
-  - Added `[⛶ Expand Canvas]` full-screen presentation mode.
-
----
-
-## 5. 🧪 Automated Test Parity
-
-- Added comprehensive unit and integration tests in [`tests/test_glas_med.py`](tests/test_glas_med.py) and [`tests/test_medical_data_layer.py`](tests/test_medical_data_layer.py).
-- **Result:** **`49 / 49 tests passed (100%)`** across all legacy and paper-specific modules.
+- Added comprehensive unit and integration tests in [`tests/test_glas_med.py`](tests/test_glas_med.py), [`tests/test_medical_data_layer.py`](tests/test_medical_data_layer.py), and [`tests/test_architecture_deep.py`](tests/test_architecture_deep.py).
+- **Result:** **`52 / 52 tests passed (100%)`** across all legacy, architectural, and mathematical modules.

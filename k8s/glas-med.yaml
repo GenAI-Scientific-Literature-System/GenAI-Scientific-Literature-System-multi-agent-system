@@ -1,28 +1,616 @@
 apiVersion: v1
 kind: Namespace
-metadata: {name: glas-med}
+metadata:
+  name: glas-med
 ---
 apiVersion: v1
 kind: ConfigMap
-metadata: {name: glas-med-config, namespace: glas-med}
-data: {MONGO_URI: mongodb://mongodb:27017, NEO4J_URI: bolt://neo4j:7687, REDIS_URL: redis://redis:6379/0, KAFKA_BOOTSTRAP_SERVERS: kafka:9092}
+metadata:
+  name: glas-med-config
+  namespace: glas-med
+data:
+  MONGO_URI: "mongodb://mongodb.glas-med.svc.cluster.local:27017"
+  NEO4J_URI: "bolt://neo4j.glas-med.svc.cluster.local:7687"
+  NEO4J_USER: "neo4j"
+  NEO4J_PASSWORD: "glasmedpassword"
+  REDIS_URL: "redis://redis.glas-med.svc.cluster.local:6379/0"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka.glas-med.svc.cluster.local:9092"
+---
+# ── INFRASTRUCTURE: MONGODB ───────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: glas-med
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:7.0
+          ports:
+            - containerPort: 27017
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: glas-med
+spec:
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+---
+# ── INFRASTRUCTURE: REDIS ─────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: glas-med
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: glas-med
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+# ── INFRASTRUCTURE: NEO4J ─────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neo4j
+  namespace: glas-med
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+    spec:
+      containers:
+        - name: neo4j
+          image: neo4j:5.20-community
+          env:
+            - name: NEO4J_AUTH
+              value: "neo4j/glasmedpassword"
+          ports:
+            - containerPort: 7474
+            - containerPort: 7687
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+  namespace: glas-med
+spec:
+  selector:
+    app: neo4j
+  ports:
+    - name: http
+      port: 7474
+      targetPort: 7474
+    - name: bolt
+      port: 7687
+      targetPort: 7687
+---
+# ── INFRASTRUCTURE: ZOOKEEPER & KAFKA ─────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zookeeper
+  namespace: glas-med
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:7.6.0
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_TICK_TIME
+              value: "2000"
+          ports:
+            - containerPort: 2181
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: glas-med
+spec:
+  selector:
+    app: zookeeper
+  ports:
+    - port: 2181
+      targetPort: 2181
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: glas-med-services, namespace: glas-med}
+metadata:
+  name: kafka
+  namespace: glas-med
 spec:
   replicas: 1
-  selector: {matchLabels: {app: glas-med-services}}
+  selector:
+    matchLabels:
+      app: kafka
   template:
-    metadata: {labels: {app: glas-med-services}}
+    metadata:
+      labels:
+        app: kafka
     spec:
       containers:
-        - {name: session-manager, image: glas-med:latest, args: [uvicorn, services.session_manager.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
-        - {name: inference-server, image: glas-med:latest, args: [uvicorn, services.inference_server.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
-        - {name: tool-collector, image: glas-med:latest, args: [uvicorn, services.tool_collector.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
-        - {name: medical-data-layer, image: glas-med:latest, args: [uvicorn, services.data_layer.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
-        - {name: agent1-worker, image: glas-med:latest, args: [uvicorn, services.agent1_worker.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
-        - {name: graph-generator, image: glas-med:latest, args: [uvicorn, services.graph_generator.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
-        - {name: graph-collector, image: glas-med:latest, args: [uvicorn, services.graph_collector.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
-        - {name: mas-orchestrator, image: glas-med:latest, args: [uvicorn, services.mas_orchestrator.main:app, --host, 0.0.0.0, --port, "8000"], envFrom: [{configMapRef: {name: glas-med-config}}]}
-        - {name: frontend, image: nginx:alpine}
+        - name: kafka
+          image: confluentinc/cp-kafka:7.6.0
+          env:
+            - name: KAFKA_BROKER_ID
+              value: "1"
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: "zookeeper.glas-med.svc.cluster.local:2181"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka.glas-med.svc.cluster.local:9092"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+          ports:
+            - containerPort: 9092
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: glas-med
+spec:
+  selector:
+    app: kafka
+  ports:
+    - port: 9092
+      targetPort: 9092
+---
+# ── 1. MEDICAL DATA LAYER MICROSERVICE ────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medical-data-layer
+  namespace: glas-med
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: medical-data-layer
+  template:
+    metadata:
+      labels:
+        app: medical-data-layer
+    spec:
+      containers:
+        - name: data-layer
+          image: glas-med:latest
+          command: ["uvicorn", "services.data_layer.main:app", "--host", "0.0.0.0", "--port", "8001"]
+          envFrom:
+            - configMapRef:
+                name: glas-med-config
+          ports:
+            - containerPort: 8001
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medical-data-layer
+  namespace: glas-med
+spec:
+  selector:
+    app: medical-data-layer
+  ports:
+    - port: 8001
+      targetPort: 8001
+---
+# ── 2. MAS ORCHESTRATOR MICROSERVICE ──────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mas-orchestrator
+  namespace: glas-med
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mas-orchestrator
+  template:
+    metadata:
+      labels:
+        app: mas-orchestrator
+    spec:
+      containers:
+        - name: orchestrator
+          image: glas-med:latest
+          command: ["uvicorn", "services.mas_orchestrator.main:app", "--host", "0.0.0.0", "--port", "8003"]
+          envFrom:
+            - configMapRef:
+                name: glas-med-config
+          ports:
+            - containerPort: 8003
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mas-orchestrator
+  namespace: glas-med
+spec:
+  selector:
+    app: mas-orchestrator
+  ports:
+    - port: 8003
+      targetPort: 8003
+---
+# ── 3. AGENT 1 (BIOBERT NER) WORKER ───────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent1-worker
+  namespace: glas-med
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agent1-worker
+  template:
+    metadata:
+      labels:
+        app: agent1-worker
+    spec:
+      containers:
+        - name: agent1
+          image: glas-med:latest
+          command: ["uvicorn", "services.agent1_worker.main:app", "--host", "0.0.0.0", "--port", "8002"]
+          envFrom:
+            - configMapRef:
+                name: glas-med-config
+          ports:
+            - containerPort: 8002
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent1-worker
+  namespace: glas-med
+spec:
+  selector:
+    app: agent1-worker
+  ports:
+    - port: 8002
+      targetPort: 8002
+---
+# ── 4. GRAPH GENERATOR MICROSERVICE ───────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graph-generator
+  namespace: glas-med
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: graph-generator
+  template:
+    metadata:
+      labels:
+        app: graph-generator
+    spec:
+      containers:
+        - name: graph-gen
+          image: glas-med:latest
+          command: ["uvicorn", "services.graph_generator.main:app", "--host", "0.0.0.0", "--port", "8007"]
+          envFrom:
+            - configMapRef:
+                name: glas-med-config
+          ports:
+            - containerPort: 8007
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8007
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graph-generator
+  namespace: glas-med
+spec:
+  selector:
+    app: graph-generator
+  ports:
+    - port: 8007
+      targetPort: 8007
+---
+# ── 5. GRAPH COLLECTOR MICROSERVICE ───────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graph-collector
+  namespace: glas-med
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: graph-collector
+  template:
+    metadata:
+      labels:
+        app: graph-collector
+    spec:
+      containers:
+        - name: graph-col
+          image: glas-med:latest
+          command: ["uvicorn", "services.graph_collector.main:app", "--host", "0.0.0.0", "--port", "8008"]
+          envFrom:
+            - configMapRef:
+                name: glas-med-config
+          ports:
+            - containerPort: 8008
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8008
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graph-collector
+  namespace: glas-med
+spec:
+  selector:
+    app: graph-collector
+  ports:
+    - port: 8008
+      targetPort: 8008
+---
+# ── 6. SESSION MANAGER MICROSERVICE ───────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: session-manager
+  namespace: glas-med
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: session-manager
+  template:
+    metadata:
+      labels:
+        app: session-manager
+    spec:
+      containers:
+        - name: sess-mgr
+          image: glas-med:latest
+          command: ["uvicorn", "services.session_manager.main:app", "--host", "0.0.0.0", "--port", "8004"]
+          envFrom:
+            - configMapRef:
+                name: glas-med-config
+          ports:
+            - containerPort: 8004
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: session-manager
+  namespace: glas-med
+spec:
+  selector:
+    app: session-manager
+  ports:
+    - port: 8004
+      targetPort: 8004
+---
+# ── 7. INFERENCE SERVER MICROSERVICE ──────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-server
+  namespace: glas-med
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inference-server
+  template:
+    metadata:
+      labels:
+        app: inference-server
+    spec:
+      containers:
+        - name: inf-srv
+          image: glas-med:latest
+          command: ["uvicorn", "services.inference_server.main:app", "--host", "0.0.0.0", "--port", "8005"]
+          envFrom:
+            - configMapRef:
+                name: glas-med-config
+          ports:
+            - containerPort: 8005
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8005
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-server
+  namespace: glas-med
+spec:
+  selector:
+    app: inference-server
+  ports:
+    - port: 8005
+      targetPort: 8005
+---
+# ── 8. TOOL COLLECTOR MICROSERVICE ────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tool-collector
+  namespace: glas-med
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tool-collector
+  template:
+    metadata:
+      labels:
+        app: tool-collector
+    spec:
+      containers:
+        - name: tool-col
+          image: glas-med:latest
+          command: ["uvicorn", "services.tool_collector.main:app", "--host", "0.0.0.0", "--port", "8006"]
+          envFrom:
+            - configMapRef:
+                name: glas-med-config
+          ports:
+            - containerPort: 8006
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8006
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tool-collector
+  namespace: glas-med
+spec:
+  selector:
+    app: tool-collector
+  ports:
+    - port: 8006
+      targetPort: 8006
+---
+# ── 9. API SERVER & FRONTEND WEB DASHBOARD ────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  namespace: glas-med
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-server
+  template:
+    metadata:
+      labels:
+        app: api-server
+    spec:
+      containers:
+        - name: api-server
+          image: glas-med:latest
+          command: ["python3", "api/server.py"]
+          envFrom:
+            - configMapRef:
+                name: glas-med-config
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-server
+  namespace: glas-med
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-server
+  ports:
+    - port: 5000
+      targetPort: 5000

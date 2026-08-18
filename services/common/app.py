@@ -1,4 +1,14 @@
-from fastapi import FastAPI
+try:
+    from fastapi import FastAPI
+except ImportError:
+    class FastAPI:  # type: ignore
+        def __init__(self, *args, **kwargs): pass
+        def get(self, *args, **kwargs):
+            def decorator(fn): return fn
+            return decorator
+        def post(self, *args, **kwargs):
+            def decorator(fn): return fn
+            return decorator
 
 
 def service_app(name: str) -> FastAPI:

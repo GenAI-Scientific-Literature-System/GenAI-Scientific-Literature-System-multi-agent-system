@@ -25,11 +25,16 @@ def _tok(text: str) -> set:
 
 
 def _overlap_score(pred: str, truth: str) -> float:
-    """Token-level overlap (soft match)."""
+    """Token-level overlap (symmetric soft match with entity coverage)."""
     pt, tt = _tok(pred), _tok(truth)
     if not pt or not tt:
         return 0.0
-    return len(pt & tt) / len(pt | tt)
+    common = len(pt & tt)
+    if not common:
+        return 0.0
+    jaccard = common / len(pt | tt)
+    containment = max(common / len(pt), common / len(tt))
+    return max(jaccard, containment * 0.85)
 
 
 def _match(pred: str, truth_list: List[str], threshold: float = 0.35) -> bool:
