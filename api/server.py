@@ -24,7 +24,8 @@ def _load_dotenv_early():
     except ImportError:
         pass
 
-_load_dotenv_early()
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS

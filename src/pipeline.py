@@ -197,9 +197,9 @@ def run_pipeline(papers: List[Dict[str, str]]) -> MERLINResult:
     # ══════════════════════════════════════════════════════════════════════════
 
     # Paper Agent 4: group comparable claims into PICO clusters and calculate
-    # reliability-weighted agreement.  This supersedes the previous
-    # assumption-set relation heuristic for the clinical API.
-    agreements        = weighted_agreements(all_claims)
+    # reliability-weighted agreement.  If PICO clusters are singletons, fall back
+    # to structural/assumption-set pairwise agreement.
+    agreements        = weighted_agreements(all_claims) or compute_agreements(all_claims, struct)
     result.agreements = agreements
     hr.v3_reasons_rewritten = sum(
         1 for a in agreements if a.reason and a.reason.startswith("[Auto-summary]")

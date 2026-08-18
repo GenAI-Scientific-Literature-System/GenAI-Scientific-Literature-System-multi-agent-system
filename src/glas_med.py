@@ -114,9 +114,13 @@ def _pico_overlap(left: Claim, right: Claim) -> bool:
     outcome_right = _text_tokens(right_pico.get("outcome", ""))
     if not intervention_left or not intervention_right or not outcome_left or not outcome_right:
         return False
-    intervention_overlap = len(intervention_left & intervention_right) / len(intervention_left | intervention_right)
-    outcome_overlap = len(outcome_left & outcome_right) / len(outcome_left | outcome_right)
-    return intervention_overlap >= 0.5 and outcome_overlap >= 0.25
+    shared_intervention = intervention_left & intervention_right
+    shared_outcome = outcome_left & outcome_right
+    if shared_intervention and shared_outcome:
+        return True
+    intervention_overlap = len(shared_intervention) / len(intervention_left | intervention_right)
+    outcome_overlap = len(shared_outcome) / len(outcome_left | outcome_right)
+    return (intervention_overlap >= 0.20 and outcome_overlap >= 0.15) or bool(shared_intervention and outcome_overlap >= 0.10)
 
 
 def _direction(claim: Claim) -> str:

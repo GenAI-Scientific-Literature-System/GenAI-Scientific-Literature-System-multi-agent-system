@@ -25,7 +25,7 @@ import json
 import logging
 import re
 from itertools import combinations
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Any
 
 import networkx as nx
 
@@ -95,6 +95,24 @@ def _predicate_heuristic(ci_data: dict, cj_data: dict) -> Tuple[str, float]:
     if pi == pj:
         return RelationType.AGREE, 0.70
     return "unknown", 0.0
+
+
+def _quick_relation(ci: Any, cj: Any) -> Tuple[str, float]:
+    ci_pred = getattr(ci, "predicate", "") or (ci.get("predicate") if isinstance(ci, dict) else "") or (ci.get("pred") if isinstance(ci, dict) else "")
+    cj_pred = getattr(cj, "predicate", "") or (cj.get("predicate") if isinstance(cj, dict) else "") or (cj.get("pred") if isinstance(cj, dict) else "")
+    ci_subj = getattr(ci, "subject", "") or (ci.get("subject") if isinstance(ci, dict) else "") or (ci.get("subj") if isinstance(ci, dict) else "")
+    cj_subj = getattr(cj, "subject", "") or (cj.get("subject") if isinstance(cj, dict) else "") or (cj.get("subj") if isinstance(cj, dict) else "")
+    ci_obj = getattr(ci, "object", "") or (ci.get("object") if isinstance(ci, dict) else "") or (ci.get("obj") if isinstance(ci, dict) else "")
+    cj_obj = getattr(cj, "object", "") or (cj.get("object") if isinstance(cj, dict) else "") or (cj.get("obj") if isinstance(cj, dict) else "")
+    ci_dom = getattr(ci, "domain", "") or (ci.get("domain") if isinstance(ci, dict) else "")
+    cj_dom = getattr(cj, "domain", "") or (cj.get("domain") if isinstance(cj, dict) else "")
+
+    if ci_dom and cj_dom and ci_dom.lower() != cj_dom.lower():
+        return RelationType.UNRELATED, 0.0
+
+    ci_dict = {"pred": ci_pred, "subj": ci_subj, "obj": ci_obj, "domain": ci_dom}
+    cj_dict = {"pred": cj_pred, "subj": cj_subj, "obj": cj_obj, "domain": cj_dom}
+    return _predicate_heuristic(ci_dict, cj_dict)
 
 
 def _infer_via_path(G: nx.DiGraph, ci_id: str, cj_id: str) -> Optional[Tuple[str, float]]:

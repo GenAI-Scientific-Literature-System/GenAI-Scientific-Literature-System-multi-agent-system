@@ -167,7 +167,7 @@ class TestEDG:
 
 # ── Pipeline (mocked Mistral) ─────────────────────────────────────────────────
 class TestPipeline:
-    @patch('src.mistral_client.requests.post')
+    @patch('src.llm_client.requests.post')
     def test_pipeline_runs(self, mock_post):
         # Mock Mistral responses
         def mock_response(url, **kwargs):
