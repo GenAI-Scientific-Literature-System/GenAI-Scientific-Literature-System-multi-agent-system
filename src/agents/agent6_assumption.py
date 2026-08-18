@@ -100,17 +100,20 @@ def _heuristic_assumptions(text: str, paper_id: str = "") -> List[Assumption]:
     # Identify population / disease scope constraints (SCOPE)
     pop_match = re.search(r"\b(patients with [^,.;]+|adults with [^,.;]+|early [^,.;]+ disease)\b", text, re.I)
     if pop_match:
+        pop_str = pop_match.group(1).strip()
+        if pop_str.count("(") > pop_str.count(")"):
+            pop_str += ")"
         assumptions.append(Assumption(
             id=f"{paper_id}_a_pop" if paper_id else str(uuid.uuid4())[:8],
             type=AssumptionType.SCOPE,
-            constraint=pop_match.group(1).strip(),
+            constraint=pop_str,
             explicit=True,
-            span=pop_match.group(1),
+            span=pop_str,
             verification=VerificationStatus.VERIFIED,
             score=1.0
         ))
     # Identify duration/followup constraints (METHOD)
-    dur_match = re.search(r"\b(\d+\s+(?:months|weeks|years|days)(?:\s+follow[- ]up)?)\b", text, re.I)
+    dur_match = re.search(r"\b(\d+(?:\.\d+)?\s+(?:months|weeks|years|days)(?:\s+follow[- ]up)?)\b", text, re.I)
     if dur_match:
         assumptions.append(Assumption(
             id=f"{paper_id}_a_dur" if paper_id else str(uuid.uuid4())[:8],
@@ -171,17 +174,26 @@ def extract_assumptions(
 
 
 def assign_assumptions_to_claims(claims: List[Claim], assumptions: List[Assumption]) -> List[Claim]:
-    """Keyword-overlap matching with paper-level fallback — zero LLM tokens."""
+    """Keyword-overlap matching with paper-level fallback and deduplication — zero LLM tokens."""
     import re
     for claim in claims:
+        seen = {a.constraint.lower() for a in claim.assumptions}
         claim_words = set(re.split(r'\W+', f"{claim.subject} {claim.object} {claim.method}".lower()))
         for assumption in assumptions:
+            c_low = assumption.constraint.lower()
+            if c_low in seen:
+                continue
             constraint_words = set(
-                w for w in re.split(r'\W+', assumption.constraint.lower()) if len(w) > 3
+                w for w in re.split(r'\W+', c_low) if len(w) > 3
             )
             if len(constraint_words & claim_words) >= 1:
                 claim.assumptions.append(assumption)
+                seen.add(c_low)
         # If no specific keyword match, associate the paper-level study assumptions
         if not claim.assumptions and assumptions:
-            claim.assumptions.extend(assumptions)
+            for a in assumptions:
+                c_low = a.constraint.lower()
+                if c_low not in seen:
+                    claim.assumptions.append(a)
+                    seen.add(c_low)
     return claims
