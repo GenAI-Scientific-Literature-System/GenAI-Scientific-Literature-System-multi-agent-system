@@ -1,3 +1,4 @@
-# agents/evidence_collection/__init__.py
-from agents.evidence_collection.evidence_collection_agent import EvidenceCollectionAgent
-__all__ = ["EvidenceCollectionAgent"]
+from .evidence_collection_agent import EvidenceCollectionAgent
+from .evidence_collector import EvidenceCollector
+
+__all__ = ["EvidenceCollectionAgent", "EvidenceCollector"]
