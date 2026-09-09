@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 # Rule-based predicate normalisation (no LLM tokens needed)
 PREDICATE_MAP = {
+    r"refute|contradict|challenge|disprove|fails to support|does not support": "refutes",
+    r"support|confirm|corroborate|consistent with|evidence for":              "supports",
+    r"no association|not associated|unrelated to|fails to correlate":          "not_associated",
+    r"associate with|associated with|association with|linked to":              "associated_with",
     r"outperform|surpass|exceed|beat":           "outperforms",
     r"improve|enhance|boost|increase":           "improves",
     r"reduce|decrease|lower|minimize":           "reduces",

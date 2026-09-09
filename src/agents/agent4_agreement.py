@@ -23,13 +23,14 @@ between non-adjacent claims via shortest path analysis.
 """
 import json
 import logging
+import re
 from itertools import combinations
 from typing import List, Tuple, Optional
 
 import networkx as nx
 
 from src.models.schemas import Claim, Agreement, RelationType
-from src.mistral_client import call_mistral
+from src.llm_client import call_llm, sanitize_for_prompt
 from src.hallucination_guard import verify_agreement_reason
 from src.struct import MERLINStruct
 
@@ -42,6 +43,8 @@ def agreement(c1_id: str, c2_id: str, struct: MERLINStruct):
     """
     Formal set-operation agreement.  Zero LLM tokens.
     Returns (relation, confidence, basis, shared_ids).
+
+    Formal set-operation agreement with deterministic output.
     """
     A1 = set(struct.claims.get(c1_id, {}).get("assumptions", []))
     A2 = set(struct.claims.get(c2_id, {}).get("assumptions", []))
@@ -50,11 +53,11 @@ def agreement(c1_id: str, c2_id: str, struct: MERLINStruct):
     if not A1 and not A2:
         return "unknown", 0.0, "no-assumptions", []
 
-    if A1 == A2:
+    if A1 == A2 and A1:
         return RelationType.AGREE, 1.0, "identical-sets", shared
 
     if A1.isdisjoint(A2):
-        return RelationType.CONTRADICT, 0.85, "disjoint-sets", []
+        return RelationType.CONTRADICT, 1.0, "disjoint-sets", []
 
     jaccard = len(A1 & A2) / len(A1 | A2)
     return RelationType.CONDITIONAL, round(jaccard, 3), "partial-overlap", shared
@@ -64,9 +67,29 @@ def _predicate_heuristic(ci_data: dict, cj_data: dict) -> Tuple[str, float]:
     """Fast structural pre-check for claims with no assumptions."""
     pi, pj = ci_data.get("pred", ""), cj_data.get("pred", "")
     di, dj = ci_data.get("domain", ""), cj_data.get("domain", "")
-    if di and dj and di != dj:
-        return RelationType.UNRELATED, 0.92
-    opposing = {("outperforms","underperforms"),("improves","reduces"),("demonstrates","fails")}
+    oi, oj = str(ci_data.get("obj", "")).lower(), str(cj_data.get("obj", "")).lower()
+    si, sj = str(ci_data.get("subj", "")).lower(), str(cj_data.get("subj", "")).lower()
+
+    def _has_negation(text: str) -> bool:
+        return bool(re.search(r"\b(no|not|none|lack|lacks|without|absence|absent|negative|null)\b", text))
+
+    def _topic_tokens(text: str) -> set[str]:
+        return {t for t in re.split(r"\W+", text) if len(t) > 4}
+
+    # Strong contradiction signal: same predicate family, similar topic, opposite polarity.
+    if pi == pj and (_has_negation(oi) ^ _has_negation(oj)):
+        topic_i = _topic_tokens(f"{si} {oi}")
+        topic_j = _topic_tokens(f"{sj} {oj}")
+        if topic_i & topic_j:
+            return RelationType.CONTRADICT, 0.82
+
+    opposing = {
+        ("outperforms", "underperforms"),
+        ("improves", "reduces"),
+        ("demonstrates", "fails"),
+        ("supports", "refutes"),
+        ("associated_with", "not_associated"),
+    }
     if (pi, pj) in opposing or (pj, pi) in opposing:
         return RelationType.CONTRADICT, 0.85
     if pi == pj:
@@ -161,7 +184,7 @@ def compute_agreements(claims: List[Claim], struct: MERLINStruct) -> List[Agreem
                 "C2_pred": cj_data.get("pred","")[:20],
                 "A1": A1[:3], "A2": A2[:3], "relation": relation,
             }, separators=(",",":"))
-            res = call_mistral(prompt, system=_REASON_SYSTEM, max_tokens=40)
+            res = call_llm(prompt, system=_REASON_SYSTEM, max_tokens=40)
             if res:
                 if isinstance(res, str):
                     raw = res

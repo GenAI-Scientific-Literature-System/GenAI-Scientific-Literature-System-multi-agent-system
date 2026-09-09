@@ -313,11 +313,15 @@ def deep_assumption_ground(assumption, source: str) -> Tuple[str, float]:
     [V5] Three-tier grounding for assumptions:
       Tier 1 — Exact span match              → VERIFIED (1.0)
       Tier 2 — Bigram overlap ≥ 0.5         → VERIFIED (score)
-      Tier 3 — Unigram overlap ≥ 0.4        → WEAK     (score)
+      Tier 3a — Unigram overlap ≥ 0.30      → WEAK     (score)
+      Tier 3b — Implicit: unigram ≥ 0.15    → WEAK     (score)
       Else                                  → REJECTED (score)
 
-    More robust than simple substring search:
-    handles paraphrased assumptions the LLM rewrites from implicit phrasing.
+    OCP FIX: implicit assumptions are paraphrased from context the LLM
+    infers rather than copies — they score lower on n-gram overlap even
+    when genuinely grounded. Tier 3b applies a relaxed threshold of 0.15
+    for implicit assumptions only, keeping them as WEAK instead of
+    silently dropping valid methodological context.
     """
     from src.models.schemas import VerificationStatus
 
@@ -330,9 +334,13 @@ def deep_assumption_ground(assumption, source: str) -> Tuple[str, float]:
     if bg_score >= 0.50:
         return VerificationStatus.VERIFIED, round(bg_score, 3)
 
-    # Tier 3: unigram overlap (lowered to 0.30: short constraints lose tokens to stop-word filter)
+    # Tier 3: unigram overlap
     ug_score = token_overlap(assumption.constraint, source)
+    # 3a — explicit assumptions need reasonable lexical overlap
     if ug_score >= 0.30:
+        return VerificationStatus.WEAK, round(ug_score, 3)
+    # 3b — implicit assumptions are inferred/paraphrased; relax threshold
+    if not assumption.explicit and ug_score >= 0.15:
         return VerificationStatus.WEAK, round(ug_score, 3)
 
     return VerificationStatus.REJECTED, round(ug_score, 3)
